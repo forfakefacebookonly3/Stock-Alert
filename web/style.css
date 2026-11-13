@@ -89,3 +89,13 @@ button { cursor: pointer; }
   background: #2f4050; padding: 10px 16px; border-radius: 999px; font-size: 13px; z-index: 20; max-width: 90vw;
 }
 .empty { padding: 32px 16px; text-align: center; color: var(--muted); }
+
+/* ---------- v2: หน้ารายการ ---------- */
+.bar h1.title { font: 700 21px/1.2 Georgia, "Noto Serif Thai", serif; letter-spacing: .2px; }
+.bar-right { display: flex; align-items: center; gap: 14px; }
+.pill { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid #2d3b48; background: #121b24; color: #cfe0ef; }
+.pill.on { background: #2d6cdf; border-color: #2d6cdf; color: #fff; }
+.hint { padding: 0 16px 8px; margin: 0; }
+.arrows { display: flex; gap: 6px; }
+.arrows button { width: 40px; height: 34px; border: 1px solid #2d3b48; border-radius: 8px; background: transparent; color: #cfe0ef; }
+.arrows button:disabled { opacity: .25; }

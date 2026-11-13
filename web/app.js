@@ -111,44 +111,97 @@ function rowHtml(s) {
     <div class="right">${right}</div></a>`;
 }
 
+let reorder = null; // รายชื่อสัญลักษณ์ระหว่างโหมดจัดลำดับ (null = ไม่ได้อยู่ในโหมด)
+
+function reorderRowHtml(sym, i, n) {
+  const tag = Logic.marketOf(sym) === "TH" ? '<span class="tag">TH</span>' : "";
+  return `<div class="row"><div><span class="name">${esc(Logic.displaySymbol(sym))}</span>${tag}</div>
+    <div class="arrows">
+      <button type="button" data-move="-1" data-i="${i}" ${i === 0 ? "disabled" : ""} aria-label="เลื่อนขึ้น">▲</button>
+      <button type="button" data-move="1" data-i="${i}" ${i === n - 1 ? "disabled" : ""} aria-label="เลื่อนลง">▼</button>
+    </div></div>`;
+}
+
+function rowsHtml() {
+  if (reorder) return reorder.map((sym, i) => reorderRowHtml(sym, i, reorder.length)).join("");
+  const d = state.data;
+  return d.symbols.length ? d.symbols.map(rowHtml).join("") : '<div class="empty">ยังไม่มีหุ้น เพิ่มตัวแรกด้านล่าง</div>';
+}
+
 routes.list = function renderList() {
   const d = state.data;
-  const rows = d.symbols.length
-    ? d.symbols.map(rowHtml).join("")
-    : '<div class="empty">ยังไม่มีหุ้น เพิ่มตัวแรกด้านล่าง</div>';
-  $("#view").innerHTML = `
-    <div class="bar"><h1>หุ้นของฉัน</h1>
-      <span><span class="muted" id="last-check">${esc(lastCheckText())}</span> &nbsp;<a href="#/settings" aria-label="ตั้งค่า">⚙︎</a></span></div>
-    <div id="rows">${rows}</div>
+  const canReorder = d.symbols.length > 1;
+  const pill = canReorder ? `<button type="button" class="pill${reorder ? " on" : ""}" id="reorder-btn">${reorder ? "เสร็จ" : "จัดลำดับ"}</button>` : "";
+  const gear = reorder ? "" : '<a href="#/settings" aria-label="ตั้งค่า">⚙︎</a>';
+  const sub = reorder
+    ? '<p class="muted hint">กด ▲ ▼ เพื่อย้าย · กด “เสร็จ” เพื่อบันทึก</p>'
+    : `<p class="muted hint" id="last-check">${esc(lastCheckText())}</p>`;
+  const addForm = reorder ? "" : `
     <form class="add" id="add-form">
       <input id="add-input" placeholder="เช่น NVDA หรือ PTT.BK" autocomplete="off" autocapitalize="characters" maxlength="12">
       <button class="btn primary" type="submit">＋ เพิ่ม</button>
     </form>
     <p class="muted" style="padding:0 16px">หุ้นไทยเติม .BK ต่อท้าย · สูงสุด 20 ตัว</p>`;
+  $("#view").innerHTML = `
+    <div class="bar"><h1 class="title">100 Bagger Stocks</h1><span class="bar-right">${pill}${gear}</span></div>
+    ${sub}
+    <div id="rows">${rowsHtml()}</div>
+    ${addForm}`;
 
-  $("#add-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const symbol = $("#add-input").value.toUpperCase().trim();
-    if (!symbol) return;
-    const btn = $("#add-form button");
-    btn.disabled = true;
-    try {
-      await change({ action: "add_symbol", symbol });
-      toast("เพิ่ม " + Logic.displaySymbol(symbol) + " แล้ว");
-      routes.list();
-    } catch (err) {
-      toast(err.message);
-      btn.disabled = false;
+  const rb = $("#reorder-btn");
+  if (rb) rb.addEventListener("click", async () => {
+    if (!reorder) { reorder = state.data.symbols.map((s) => s.symbol); routes.list(); return; }
+    const order = reorder.slice();
+    if (order.join() !== state.data.symbols.map((s) => s.symbol).join()) {
+      rb.disabled = true;
+      try {
+        await change({ action: "reorder", order });
+        toast("บันทึกลำดับแล้ว");
+      } catch (err) {
+        toast(err.message);
+        rb.disabled = false;
+        return;
+      }
     }
+    reorder = null;
+    if ((location.hash || "#/") === "#/") routes.list();
   });
 
-  // เติมราคา/แนวโน้มทีละตัว
+  $("#rows").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-move]");
+    if (!b || !reorder) return;
+    const i = Number(b.dataset.i);
+    const j = i + Number(b.dataset.move);
+    if (j < 0 || j >= reorder.length) return;
+    [reorder[i], reorder[j]] = [reorder[j], reorder[i]];
+    $("#rows").innerHTML = rowsHtml();
+  });
+
+  if (!reorder) {
+    $("#add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const symbol = $("#add-input").value.toUpperCase().trim();
+      if (!symbol) return;
+      const btn = $("#add-form button");
+      btn.disabled = true;
+      try {
+        await change({ action: "add_symbol", symbol });
+        toast("เพิ่ม " + Logic.displaySymbol(symbol) + " แล้ว");
+        routes.list();
+      } catch (err) {
+        toast(err.message);
+        btn.disabled = false;
+      }
+    });
+  }
+
+  // เติมราคา/แนวโน้มทีละตัว (ไม่วาดทับระหว่างจัดลำดับ)
   d.symbols.forEach(async (s) => {
     if (state.quotes[s.symbol] && !state.quotes[s.symbol].stale) return;
     await loadQuote(s.symbol);
-    if ((location.hash || "#/") === "#/") {
+    if ((location.hash || "#/") === "#/" && !reorder) {
       const rowsEl = $("#rows");
-      if (rowsEl) rowsEl.innerHTML = state.data.symbols.map(rowHtml).join("");
+      if (rowsEl) rowsEl.innerHTML = rowsHtml();
     }
   });
 };
@@ -459,6 +512,7 @@ function route() {
   const m = hash.match(/^#\/s\/(.+)$/);
   if (window.Sheet) window.Sheet.close();
   if (!m && activeChart) { activeChart.destroy(); activeChart = null; }
+  if (m || hash === "#/settings") reorder = null; // ออกจากหน้ารายการ = ทิ้งการจัดลำดับที่ยังไม่บันทึก
   if (m && routes.chart) routes.chart(decodeURIComponent(m[1]));
   else if (hash === "#/settings") routes.settings();
   else routes.list();
