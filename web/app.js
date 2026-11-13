@@ -212,12 +212,233 @@ routes.settings = function renderSettings() {
   });
 };
 
+// ---------- price sheet ----------
+const KIND_LABEL = { sl: "Stop Loss", tp: "Take Profit", alert: "Alert ราคา" };
+
+window.Sheet = (function () {
+  let cur = null;
+  const el = {
+    sheet: $("#sheet"), backdrop: $("#sheet-backdrop"), title: $("#sheet-title"), kinds: $("#sheet-kinds"),
+    price: $("#sheet-price"), pct: $("#sheet-pct"), warn: $("#sheet-warn"),
+    minus: $("#sheet-minus"), plus: $("#sheet-plus"), save: $("#sheet-save"), cancel: $("#sheet-cancel"),
+  };
+
+  const stepOf = (last) => (last < 10 ? 0.05 : last < 100 ? 0.25 : last < 1000 ? 1 : 5);
+  const value = () => parseFloat(el.price.value);
+
+  function refresh() {
+    el.title.textContent = `${Logic.displaySymbol(cur.symbol)} — ${KIND_LABEL[cur.kind]}`;
+    el.kinds.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.kind === cur.kind));
+    const p = value();
+    if (!(p > 0)) {
+      el.pct.textContent = "ใส่ราคาที่มากกว่า 0";
+      el.warn.hidden = true;
+      el.save.disabled = true;
+      return;
+    }
+    el.save.disabled = false;
+    const pct = Logic.pctFrom(p, cur.last);
+    el.pct.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% จากราคาล่าสุด ${Logic.fmt(cur.last)}`;
+    const fireKind = cur.kind === "alert" ? Logic.dirFor(p, cur.last) : cur.kind;
+    const now = Logic.wouldFireNow(fireKind, p, cur.last);
+    el.warn.hidden = !now;
+    if (now) el.warn.textContent = "⚠️ ราคาล่าสุดถึงระดับนี้แล้ว จะแจ้งเตือนในรอบเช็กถัดไปทันที";
+  }
+
+  function open(opts) {
+    cur = { ...opts };
+    el.kinds.hidden = !cur.choose;
+    el.price.value = Logic.fmt(cur.price);
+    el.sheet.hidden = false;
+    el.backdrop.hidden = false;
+    refresh();
+  }
+
+  function close() {
+    cur = null;
+    el.sheet.hidden = true;
+    el.backdrop.hidden = true;
+  }
+
+  function nudge(sign) {
+    const step = stepOf(cur.last);
+    const next = Math.max(step, Math.round(((value() || cur.last) + sign * step) / step) * step);
+    el.price.value = Logic.fmt(next);
+    refresh();
+  }
+
+  async function save() {
+    const price = value();
+    if (!(price > 0)) return;
+    const done = cur.onSaved; // เก็บไว้ก่อน await: ถ้าผู้ใช้ออกจากหน้าระหว่างบันทึก cur จะถูก close() เป็น null
+    const base = { symbol: cur.symbol, price };
+    let action;
+    if (cur.kind === "sl") action = { ...base, action: "set_sl" };
+    else if (cur.kind === "tp") action = { ...base, action: "set_tp" };
+    else if (cur.id) action = { ...base, action: "update_alert", id: cur.id, last: cur.last };
+    else action = { ...base, action: "add_alert", last: cur.last };
+    el.save.disabled = true;
+    try {
+      await change(action);
+      close();
+      toast("บันทึกแล้ว");
+      if (done) done();
+    } catch (err) {
+      toast(err.message);
+      if (cur) el.save.disabled = false;
+    }
+  }
+
+  el.kinds.addEventListener("click", (e) => {
+    const k = e.target.dataset && e.target.dataset.kind;
+    if (k && cur) { cur.kind = k; cur.id = undefined; refresh(); }
+  });
+  el.price.addEventListener("input", () => cur && refresh());
+  el.minus.addEventListener("click", () => cur && nudge(-1));
+  el.plus.addEventListener("click", () => cur && nudge(1));
+  el.save.addEventListener("click", () => cur && save());
+  el.cancel.addEventListener("click", close);
+  el.backdrop.addEventListener("click", close);
+
+  return { open, close };
+})();
+
+// ---------- chart view ----------
+let activeChart = null;
+let chartToken = 0;
+
+function chartLines(s, q) {
+  const lines = [];
+  const r = Logic.range52w(q.candles);
+  if (r) {
+    lines.push({ price: r.high, color: "ref", title: "52w สูง" });
+    lines.push({ price: r.low, color: "ref", title: "52w ต่ำ" });
+  }
+  if (s.sl) lines.push({ price: s.sl.price, color: s.sl.status === "active" ? "sl" : "fired", title: "SL" });
+  if (s.tp) lines.push({ price: s.tp.price, color: s.tp.status === "active" ? "tp" : "fired", title: "TP" });
+  s.alerts.forEach((a) => lines.push({ price: a.price, color: a.status === "active" ? "alert" : "fired", title: "🔔" }));
+  return lines;
+}
+
+function lineItemHtml(kind, target, line, last) {
+  const fired = line.status === "fired";
+  const pct = Logic.pctFrom(line.price, last);
+  const label = kind === "sl" ? "SL" : kind === "tp" ? "TP" : line.dir === "above" ? "🔔 ขึ้นถึง" : "🔔 ลงถึง";
+  let note = `<span class="muted">${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%</span>`;
+  if (fired) {
+    const when = new Date(line.fired_at).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    note = `<span class="muted">แจ้งแล้ว ${esc(when)} ที่ ${Logic.fmt(line.fired_price)}</span>`;
+  }
+  const acts = fired
+    ? `<button class="link" data-act="rearm" data-target="${esc(target)}">เปิดใช้ซ้ำ</button>`
+    : `<button class="link" data-act="edit" data-kind="${kind}" data-target="${esc(target)}">แก้</button>`;
+  return `<div class="line-item ${fired ? "fired" : ""}">
+    <span><span class="c-${kind}">${label} ${Logic.fmt(line.price)}</span> ${note}</span>
+    <span class="acts">${acts}<button class="link" data-act="remove" data-kind="${kind}" data-target="${esc(target)}">ลบ</button></span></div>`;
+}
+
+routes.chart = async function renderChart(symbol) {
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+  const token = ++chartToken;
+  const find = () => state.data.symbols.find((x) => x.symbol === symbol);
+  if (!find()) { location.hash = "#/"; return; }
+  const name = esc(Logic.displaySymbol(symbol));
+
+  $("#view").innerHTML = `
+    <div class="bar"><a href="#/">‹ ${name}</a><span id="c-price" class="muted">กำลังโหลด…</span><span id="c-trend"></span></div>
+    <div id="chart"></div>
+    <div class="legend muted"><span style="color:#5aa9ff">━ MA50</span> &nbsp; <span style="color:#b08cff">┅ MA200</span> &nbsp; แตะกราฟค้างเพื่อวางเส้น <span id="c-stale"></span></div>
+    <div class="btns">
+      <button class="btn sl" data-open="sl">SL</button>
+      <button class="btn tp" data-open="tp">TP</button>
+      <button class="btn al" data-open="alert">＋ Alert</button>
+    </div>
+    <div id="c-lines"></div>
+    <div class="stack"><button class="btn danger" id="c-remove">ลบ ${name} ออกจากรายการ</button></div>`;
+
+  const q = await loadQuote(symbol);
+  // ผู้ใช้อาจออกจากหน้านี้ (หรือออกแล้วกลับเข้ามาใหม่) ระหว่างรอ: ห้ามแตะ DOM/กราฟที่ไม่ใช่ของรอบนี้
+  if (token !== chartToken) return;
+  if (location.hash !== "#/s/" + encodeURIComponent(symbol) && decodeURIComponent(location.hash) !== "#/s/" + symbol) return;
+  if (!q) {
+    $("#chart").innerHTML = `<div class="empty">ดึงกราฟไม่ได้<br><button class="btn" id="c-retry">ลองใหม่</button></div>`;
+    $("#c-retry").addEventListener("click", () => routes.chart(symbol));
+    return;
+  }
+
+  const pct = q.prevClose ? Logic.pctFrom(q.price, q.prevClose) : null;
+  const cls = pct == null || pct === 0 ? "muted" : pct > 0 ? "up" : "down";
+  $("#c-price").className = "";
+  $("#c-price").innerHTML = `<b>${Logic.curSym(symbol)}${Logic.fmt(q.price)}</b> <span class="${cls}">${pct == null ? "" : (pct > 0 ? "+" : "") + pct.toFixed(1) + "%"}</span>`;
+  const t = Logic.trendOf(q.candles.map((c) => c.c));
+  $("#c-trend").innerHTML = t ? `<span class="trend ${t}">${TREND[t]}</span>` : "";
+  $("#c-stale").textContent = q.stale ? "· ข้อมูลเก่า" : "";
+
+  const openSheet = (kind, price, extra) =>
+    Sheet.open({ symbol, last: q.price, kind, price, onSaved: redraw, ...extra });
+
+  const chart = AlertChart.create($("#chart"), {
+    onLongPress: (price) => openSheet("alert", price, { choose: true }),
+  });
+  activeChart = chart;
+  chart.setData(q.candles);
+
+  function redraw() {
+    const s = find();
+    if (!s || activeChart !== chart) return;
+    chart.setLines(chartLines(s, q));
+    const items = [];
+    if (s.tp) items.push(lineItemHtml("tp", "tp", s.tp, q.price));
+    s.alerts.slice().sort((a, b) => b.price - a.price).forEach((a) => items.push(lineItemHtml("alert", a.id, a, q.price)));
+    if (s.sl) items.push(lineItemHtml("sl", "sl", s.sl, q.price));
+    $("#c-lines").innerHTML = items.join("");
+  }
+  redraw();
+
+  $(".btns").addEventListener("click", (e) => {
+    const kind = e.target.dataset && e.target.dataset.open;
+    if (!kind) return;
+    const s = find();
+    const existing = kind === "sl" ? s.sl : kind === "tp" ? s.tp : null;
+    openSheet(kind, existing ? existing.price : q.price);
+  });
+
+  $("#c-lines").addEventListener("click", async (e) => {
+    const d = e.target.dataset || {};
+    if (!d.act) return;
+    const s = find();
+    try {
+      if (d.act === "edit") {
+        const line = d.kind === "sl" ? s.sl : d.kind === "tp" ? s.tp : s.alerts.find((a) => a.id === d.target);
+        openSheet(d.kind, line.price, d.kind === "alert" ? { id: d.target } : {});
+        return;
+      }
+      if (d.act === "rearm") await change({ action: "rearm", symbol, target: d.target });
+      if (d.act === "remove") {
+        if (d.kind === "sl") await change({ action: "clear_sl", symbol });
+        else if (d.kind === "tp") await change({ action: "clear_tp", symbol });
+        else await change({ action: "remove_alert", symbol, id: d.target });
+      }
+      redraw();
+    } catch (err) { toast(err.message); }
+  });
+
+  $("#c-remove").addEventListener("click", async () => {
+    if (!confirm(`ลบ ${Logic.displaySymbol(symbol)} และเส้นทั้งหมดของหุ้นนี้?`)) return;
+    try {
+      await change({ action: "remove_symbol", symbol });
+      location.hash = "#/";
+    } catch (err) { toast(err.message); }
+  });
+};
+
 // ---------- router ----------
 function route() {
   if (!state.data) return;
   const hash = location.hash || "#/";
   const m = hash.match(/^#\/s\/(.+)$/);
   if (window.Sheet) window.Sheet.close();
+  if (!m && activeChart) { activeChart.destroy(); activeChart = null; }
   if (m && routes.chart) routes.chart(decodeURIComponent(m[1]));
   else if (hash === "#/settings") routes.settings();
   else routes.list();
