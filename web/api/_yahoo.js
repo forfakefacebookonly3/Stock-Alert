@@ -29,11 +29,16 @@ function parseChart(json) {
   };
 }
 
+// ~3 ปีที่ดูย้อนได้ (3 × 252 วันทำการ) + 200 แท่งให้ MA200 มีค่าตั้งแต่ต้นช่วง
+const KEEP = 3 * 252 + 200;
+
 async function fetchChart(symbol, fetchImpl = fetch) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=2y&interval=1d`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1d`;
   const r = await fetchImpl(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) return null;
-  return parseChart(await r.json());
+  const out = parseChart(await r.json());
+  if (out && out.candles.length > KEEP) out.candles = out.candles.slice(-KEEP);
+  return out;
 }
 
-module.exports = { parseChart, fetchChart };
+module.exports = { parseChart, fetchChart, KEEP };

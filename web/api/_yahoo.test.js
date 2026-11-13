@@ -69,6 +69,20 @@ test("fetchChart returns null on HTTP error and parses on success", async () => 
     calledUrl = url;
     return { ok: true, json: async () => chart() };
   });
-  assert.match(calledUrl, /\/v8\/finance\/chart\/PTT\.BK\?range=2y&interval=1d$/);
+  assert.match(calledUrl, /\/v8\/finance\/chart\/PTT\.BK\?range=5y&interval=1d$/);
   assert.equal(out.candles.length, 3);
+});
+
+test("fetchChart keeps only the latest KEEP candles", async () => {
+  const n = 1000;
+  const ts = Array.from({ length: n }, (_, i) => 1700000000 + i * 86400);
+  const vals = Array.from({ length: n }, (_, i) => 100 + i);
+  const payload = chart({ meta: { gmtoffset: 0, regularMarketPrice: undefined }, timestamp: ts, quote: { open: vals, high: vals, low: vals, close: vals } });
+  const out = await Y.fetchChart("NVDA", async () => ({ ok: true, json: async () => payload }));
+  assert.equal(Y.KEEP, 956);
+  assert.equal(out.candles.length, 956);
+  assert.equal(out.candles[0].c, 100 + (n - 956));
+  assert.equal(out.candles[955].c, 1099);
+  assert.equal(out.prevClose, 1098);
+  assert.equal(out.price, 1099);
 });
