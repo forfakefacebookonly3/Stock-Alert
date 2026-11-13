@@ -29,6 +29,11 @@ GitHub Actions ทุก 15 นาทีช่วงตลาดเปิด  �
 - เพิ่มหรือแก้ตัวแปรใน Vercel แล้วต้อง deploy ใหม่ด้วยคำสั่งเดียวกัน (หรือกด Redeploy ในหน้าเว็บ Vercel) ค่าใหม่จึงจะมีผล
 - กุญแจ VAPID เก็บอยู่ในไฟล์ `.env` ของโฟลเดอร์นี้ในเครื่อง (git ไม่ติดตาม) ถ้าไฟล์นี้หาย ให้สร้างกุญแจใหม่ตามข้อ 1 แล้วใส่ค่าใหม่ทั้งใน Vercel และ GitHub Actions จากนั้นเปิด noti บนมือถือใหม่
 - `VAPID_SUBJECT` ใช้ลิงก์ของ repo แทนอีเมล
+- **ตัวสั่งรันตัวเช็ก = cron-job.org** (งาน `Stock Alert check` ทุก 15 นาที) เรียก
+  `POST https://api.github.com/repos/forfakefacebookonly3/Stock-Alert/actions/workflows/check.yml/dispatches`
+  body `{"ref":"main"}` ด้วย token แยก (fine-grained, เฉพาะ repo นี้, Actions: Read and write)
+  เพราะตารางเวลา (`schedule`) ของ GitHub ไม่เคยรันให้ repo นี้เลยตั้งแต่สร้าง (ยังคงเปิดไว้เป็นสำรอง)
+  ถ้าแถบ "ตัวเช็กราคาไม่ทำงาน" ขึ้น: ดูประวัติงานใน cron-job.org ก่อน — 401/403 = token หมดอายุหรือสิทธิ์ไม่พอ
 
 ## สิ่งที่ต้องมีก่อน
 
