@@ -67,6 +67,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "TMDX",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
