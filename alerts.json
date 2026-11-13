@@ -120,7 +120,7 @@
       "alerts": [
         {
           "id": "a1",
-          "price": 28.2,
+          "price": 31,
           "dir": "below",
           "status": "active"
         }
