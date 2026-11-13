@@ -48,7 +48,10 @@
     {
       "symbol": "GOOGL",
       "sl": null,
-      "tp": null,
+      "tp": {
+        "price": 360,
+        "status": "active"
+      },
       "alerts": []
     }
   ]
