@@ -1,6 +1,15 @@
 {
   "version": 1,
   "heartbeat": "2026-11-13",
-  "push": [],
+  "push": [
+    {
+      "endpoint": "https://fcm.googleapis.com/fcm/send/dxsO8YTeXDI:APA91bGGUh_k9A_QKSbXu7xj-sBdBOxCdL2HmzNXy7f5BnLoXna42HG9rCxUuJkayUvFadIRDfHQL7tCKVIariWu3yRvdhMU2eDC0KA0dMUfxgIwa23_Dj1gV84eV6dT6LpUEseSh7tE",
+      "keys": {
+        "p256dh": "BP_tlN4S4OZs0mC8Dq2Ht02AhnV7j6s7WfsprRH7caqcfGNoDmbqv42yyM2WKzHaoT7GijzmKy436Xl-z3VAN1s",
+        "auth": "nHbmKkKBfH_BlEKYt7NAAA"
+      },
+      "ok": true
+    }
+  ],
   "symbols": []
 }
