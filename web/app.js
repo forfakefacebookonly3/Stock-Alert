@@ -2,7 +2,6 @@
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const TREND = { up: "▲ ขาขึ้น", down: "▼ ขาลง", side: "▬ ไซด์เวย์" };
-const STALE_MS = 45 * 60 * 1000;
 
 const store = {
   get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } },
@@ -66,9 +65,9 @@ function updateBanner() {
     html = 'ยังไม่ได้เปิด noti — <a href="#/settings">ไปหน้าตั้งค่า</a>';
   } else if (d && state.status) {
     const now = new Date();
-    const anyOpen = d.symbols.some((s) => Logic.isMarketOpen(Logic.marketOf(s.symbol), now));
+    const markets = [...new Set(d.symbols.map((s) => Logic.marketOf(s.symbol)))];
     const last = state.status.last_run ? new Date(state.status.last_run).getTime() : 0;
-    if (anyOpen && now.getTime() - last > STALE_MS) {
+    if (Logic.checkerStale(last, now, markets)) {
       html = "⚠️ ตัวเช็กราคาไม่ทำงานเกิน 45 นาที alert อาจไม่แจ้ง";
     }
   }
@@ -161,6 +160,9 @@ function urlB64ToUint8Array(b64) {
   return Uint8Array.from(raw, (ch) => ch.charCodeAt(0));
 }
 
+// เก็บ promise ของการลงทะเบียน SW ไว้ให้ enablePush() รอ/รายงาน error (ไม่ให้เงียบ)
+let swReg = null;
+
 async function enablePush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     throw new Error("เบราว์เซอร์นี้ไม่รองรับ noti");
@@ -170,11 +172,25 @@ async function enablePush() {
   if (perm !== "granted") {
     throw new Error("noti ถูกปิดอยู่ เปิดได้ที่ การตั้งค่าไซต์ ของ Chrome → การแจ้งเตือน");
   }
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlB64ToUint8Array(state.data.vapid_public_key),
+  if (swReg) {
+    try { await swReg; } catch (e) { throw new Error("ลงทะเบียน service worker ไม่สำเร็จ: " + (e && e.message ? e.message : e)); }
+  }
+  // ready จะไม่ resolve ถ้าลงทะเบียนไม่สำเร็จ → จำกัดเวลารอ
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("service worker ยังไม่พร้อม ลองปิดแล้วเปิดแอปใหม่")), 10000);
   });
+  let reg;
+  try { reg = await Promise.race([navigator.serviceWorker.ready, timeout]); } finally { clearTimeout(timer); }
+  let sub;
+  try {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8Array(state.data.vapid_public_key),
+    });
+  } catch (e) {
+    throw new Error("สมัครรับ noti ไม่สำเร็จ: " + (e && e.message ? e.message : e));
+  }
   state.data = await api("/api/subscribe", sub.toJSON());
 }
 
@@ -236,7 +252,7 @@ window.Sheet = (function () {
       el.save.disabled = true;
       return;
     }
-    el.save.disabled = false;
+    el.save.disabled = !!cur.saving;
     const pct = Logic.pctFrom(p, cur.last);
     el.pct.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% จากราคาล่าสุด ${Logic.fmt(cur.last)}`;
     const fireKind = cur.kind === "alert" ? Logic.dirFor(p, cur.last) : cur.kind;
@@ -270,22 +286,24 @@ window.Sheet = (function () {
   async function save() {
     const price = value();
     if (!(price > 0)) return;
-    const done = cur.onSaved; // เก็บไว้ก่อน await: ถ้าผู้ใช้ออกจากหน้าระหว่างบันทึก cur จะถูก close() เป็น null
+    const mine = cur; // เก็บไว้ก่อน await: ระหว่างบันทึก cur อาจถูก close() เป็น null หรือถูกแทนด้วย sheet อื่น
+    const done = mine.onSaved;
     const base = { symbol: cur.symbol, price };
     let action;
     if (cur.kind === "sl") action = { ...base, action: "set_sl" };
     else if (cur.kind === "tp") action = { ...base, action: "set_tp" };
     else if (cur.id) action = { ...base, action: "update_alert", id: cur.id, last: cur.last };
     else action = { ...base, action: "add_alert", last: cur.last };
+    mine.saving = true;
     el.save.disabled = true;
     try {
       await change(action);
-      close();
-      toast("บันทึกแล้ว");
+      if (cur === mine) { close(); toast("บันทึกแล้ว"); }
       if (done) done();
     } catch (err) {
       toast(err.message);
-      if (cur) el.save.disabled = false;
+      mine.saving = false;
+      if (cur === mine) el.save.disabled = false;
     }
   }
 
@@ -296,7 +314,7 @@ window.Sheet = (function () {
   el.price.addEventListener("input", () => cur && refresh());
   el.minus.addEventListener("click", () => cur && nudge(-1));
   el.plus.addEventListener("click", () => cur && nudge(1));
-  el.save.addEventListener("click", () => cur && save());
+  el.save.addEventListener("click", () => cur && !cur.saving && save());
   el.cancel.addEventListener("click", close);
   el.backdrop.addEventListener("click", close);
 
@@ -356,11 +374,21 @@ routes.chart = async function renderChart(symbol) {
     <div id="c-lines"></div>
     <div class="stack"><button class="btn danger" id="c-remove">ลบ ${name} ออกจากรายการ</button></div>`;
 
+  // ผูกปุ่มลบก่อนรอราคา: หุ้นที่ Yahoo ไม่ให้ข้อมูลแล้วต้องยังลบออกได้
+  $("#c-remove").addEventListener("click", async () => {
+    if (!confirm(`ลบ ${Logic.displaySymbol(symbol)} และเส้นทั้งหมดของหุ้นนี้?`)) return;
+    try {
+      await change({ action: "remove_symbol", symbol });
+      location.hash = "#/";
+    } catch (err) { toast(err.message); }
+  });
+
   const q = await loadQuote(symbol);
   // ผู้ใช้อาจออกจากหน้านี้ (หรือออกแล้วกลับเข้ามาใหม่) ระหว่างรอ: ห้ามแตะ DOM/กราฟที่ไม่ใช่ของรอบนี้
   if (token !== chartToken) return;
   if (location.hash !== "#/s/" + encodeURIComponent(symbol) && decodeURIComponent(location.hash) !== "#/s/" + symbol) return;
   if (!q) {
+    $(".btns").style.display = "none"; // ไม่มีราคา → ตั้ง SL/TP/Alert ไม่ได้
     $("#chart").innerHTML = `<div class="empty">ดึงกราฟไม่ได้<br><button class="btn" id="c-retry">ลองใหม่</button></div>`;
     $("#c-retry").addEventListener("click", () => routes.chart(symbol));
     return;
@@ -422,14 +450,6 @@ routes.chart = async function renderChart(symbol) {
       redraw();
     } catch (err) { toast(err.message); }
   });
-
-  $("#c-remove").addEventListener("click", async () => {
-    if (!confirm(`ลบ ${Logic.displaySymbol(symbol)} และเส้นทั้งหมดของหุ้นนี้?`)) return;
-    try {
-      await change({ action: "remove_symbol", symbol });
-      location.hash = "#/";
-    } catch (err) { toast(err.message); }
-  });
 };
 
 // ---------- router ----------
@@ -446,7 +466,10 @@ function route() {
 }
 
 async function boot() {
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    swReg = navigator.serviceWorker.register("/sw.js");
+    swReg.catch(() => {}); // กัน unhandled rejection ตอนบูต; error จริงจะโผล่ตอนกด "เปิด noti"
+  }
   try {
     state.data = await api("/api/data");
   } catch (err) {

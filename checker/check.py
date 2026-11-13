@@ -48,12 +48,17 @@ def run(data: dict, now: datetime, get_price, send) -> dict:
     return out
 
 
+def load(path: Path) -> dict:
+    # utf-8-sig: ทนไฟล์ที่มี BOM จาก editor บน Windows (เขียนกลับเป็น utf-8 ปกติ)
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
 def main() -> None:
     from . import prices as price_source
     from . import push
 
     path = Path(os.environ.get("DATA_FILE", "data/alerts.json"))
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = load(path)
     now = datetime.now(timezone.utc)
     out = run(data, now, price_source.last_price, push.send)
     if out != data:

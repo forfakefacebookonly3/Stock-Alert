@@ -59,6 +59,15 @@
     const h = date.getUTCHours();
     return h >= from && h <= to;
   }
+  // ตัวเช็กถือว่าค้างเมื่อตลาดที่ดูอยู่เปิดอยู่ และผ่านไป >45 นาทีนับจากรอบล่าสุดหรือจุดเปิดหน้าต่างวันนี้ (อันที่ใหม่กว่า)
+  function checkerStale(lastRunMs, now, markets) {
+    const STALE = 45 * 60 * 1000;
+    return (markets || []).some((m) => {
+      if (!isMarketOpen(m, now)) return false;
+      const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), WINDOWS[m][0]);
+      return now.getTime() - Math.max(lastRunMs || 0, start) > STALE;
+    });
+  }
   function dirFor(price, last) {
     return price > last ? "above" : "below";
   }
@@ -69,5 +78,5 @@
     return Number(n).toFixed(2);
   }
 
-  return { marketOf, displaySymbol, curSym, sma, trendOf, pctFrom, range52w, isMarketOpen, dirFor, wouldFireNow, fmt };
+  return { marketOf, displaySymbol, curSym, sma, trendOf, pctFrom, range52w, isMarketOpen, checkerStale, dirFor, wouldFireNow, fmt };
 });

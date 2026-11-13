@@ -10,8 +10,8 @@ function fakeWebpush(results = {}) {
   const calls = [];
   return {
     calls,
-    sendNotification: async (s, body) => {
-      calls.push({ endpoint: s.endpoint, keys: s.keys, body });
+    sendNotification: async (s, body, options) => {
+      calls.push({ endpoint: s.endpoint, keys: s.keys, body, options });
       const code = results[s.endpoint];
       if (code) { const e = new Error("push failed"); e.statusCode = code; throw e; }
     },
@@ -25,6 +25,7 @@ test("sends the JSON payload to every ok device only", async () => {
   assert.deepEqual(wp.calls.map((c) => c.endpoint), ["https://push.example/1", "https://push.example/3"]);
   assert.deepEqual(JSON.parse(wp.calls[0].body), payload);
   assert.deepEqual(wp.calls[0].keys, { p256dh: "p", auth: "a" });
+  assert.deepEqual(wp.calls[0].options, { TTL: 86400, urgency: "high" });
   assert.equal(out.sent, 2);
   assert.equal(out.failed, 0);
   assert.equal(out.changed, false);

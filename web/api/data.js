@@ -1,4 +1,4 @@
-const { readData, publicView } = require("./_store.js");
+const { NOT_FOUND, readData, publicView } = require("./_store.js");
 
 module.exports = async (req, res) => {
   try {
@@ -7,6 +7,6 @@ module.exports = async (req, res) => {
     return res.status(200).json(publicView(data));
   } catch (e) {
     console.error("data failed:", e && e.message);
-    return res.status(502).json({ error: "อ่านข้อมูลไม่ได้" });
+    return res.status(502).json({ error: e && e.message === NOT_FOUND ? NOT_FOUND : "อ่านข้อมูลไม่ได้" });
   }
 };

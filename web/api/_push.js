@@ -7,7 +7,7 @@ async function sendAll(data, payload, webpush) {
   for (const sub of out.push) {
     if (sub.ok === false) continue;
     try {
-      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body);
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { TTL: 86400, urgency: "high" });
       sent++;
     } catch (e) {
       failed++;

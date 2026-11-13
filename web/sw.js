@@ -1,5 +1,5 @@
 // Service worker: cache หน้าแอป (ไม่ cache /api/) + รับ Web Push
-const CACHE = "alert-shell-v1";
+const CACHE = "alert-shell-v2";
 const SHELL = ["/", "/style.css", "/logic.js", "/chart.js", "/app.js", "/vendor/lightweight-charts.js", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -21,11 +21,13 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     fetch(e.request)
       .then((r) => {
-        const copy = r.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        if (r.ok && r.status === 200) {
+          const copy = r.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        }
         return r;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match("/")))
+      .catch(() => caches.match(e.request).then((r) => r || (e.request.mode === "navigate" ? caches.match("/") : Response.error())))
   );
 });
 

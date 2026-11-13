@@ -31,7 +31,7 @@ function parseChart(json) {
 
 async function fetchChart(symbol, fetchImpl = fetch) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=2y&interval=1d`;
-  const r = await fetchImpl(url, { headers: { "User-Agent": UA } });
+  const r = await fetchImpl(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) return null;
   return parseChart(await r.json());
 }

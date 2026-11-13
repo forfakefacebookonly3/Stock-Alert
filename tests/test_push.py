@@ -29,3 +29,23 @@ def test_empty_key_without_dry_run_is_error(monkeypatch):
     monkeypatch.delenv("DRY_RUN", raising=False)
     monkeypatch.setenv("VAPID_PRIVATE_KEY", "")
     assert push.send(SUB, PAYLOAD) == "error"
+
+
+def test_webpush_called_with_ttl_urgency_and_timeout(monkeypatch):
+    import types
+
+    seen = {}
+
+    def fake_webpush(**kwargs):
+        seen.update(kwargs)
+
+    fake = types.ModuleType("pywebpush")
+    fake.webpush = fake_webpush
+    fake.WebPushException = type("WebPushException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "pywebpush", fake)
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "k")
+    assert push.send(SUB, PAYLOAD) == "ok"
+    assert seen["ttl"] == 86400
+    assert seen["headers"] == {"Urgency": "high"}
+    assert seen["timeout"] == 10

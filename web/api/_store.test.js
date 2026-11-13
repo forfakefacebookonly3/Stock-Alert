@@ -34,13 +34,20 @@ function fakeGitHub(initial, putStatuses = []) {
   return { state, fetchImpl };
 }
 
-test("readData decodes the file; missing file gives empty data", async () => {
+test("readData decodes the file; missing file rejects with a clear message", async () => {
   const d = emptyData();
   d.symbols.push({ symbol: "ปตท", sl: null, tp: null, alerts: [] }); // ตรวจ UTF-8
   const gh = fakeGitHub(d);
   assert.deepEqual(await S.readData(gh.fetchImpl), { data: d, sha: "sha1" });
   const none = fakeGitHub(null);
-  assert.deepEqual(await S.readData(none.fetchImpl), { data: emptyData(), sha: null });
+  await assert.rejects(S.readData(none.fetchImpl), { message: "ไม่พบ alerts.json บน branch data — ตรวจ GITHUB_REPO และ branch data" });
+});
+
+test("readData tolerates a UTF-8 BOM", async () => {
+  const d = emptyData();
+  const content = Buffer.from("﻿" + JSON.stringify(d), "utf8").toString("base64");
+  const fetchImpl = async () => res(200, { content, sha: "shaB" });
+  assert.deepEqual(await S.readData(fetchImpl), { data: d, sha: "shaB" });
 });
 
 test("writeData sends branch, sha, message and base64 content", async () => {

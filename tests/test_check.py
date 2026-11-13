@@ -153,3 +153,9 @@ def test_only_device_gone_on_first_send_keeps_both_active_and_is_not_resent():
     assert out["symbols"][0]["sl"] == {"price": 178, "status": "active"}
     assert out["symbols"][1]["sl"] == {"price": 200, "status": "active"}
     assert send.calls["https://push.example/1"] == 1
+
+
+def test_load_accepts_utf8_bom(tmp_path):
+    p = tmp_path / "alerts.json"
+    p.write_bytes(b"\xef\xbb\xbf" + '{"version":1,"symbols":[{"symbol":"ปตท"}]}'.encode("utf-8"))
+    assert check.load(p)["symbols"][0]["symbol"] == "ปตท"

@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
   try {
     const r = await fetch(
       `https://api.github.com/repos/${repo}/actions/workflows/check.yml/runs?status=success&per_page=1`,
-      { headers }
+      { headers, signal: AbortSignal.timeout(8000) }
     );
     if (r.ok) {
       const j = await r.json();

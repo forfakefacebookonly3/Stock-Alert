@@ -27,7 +27,9 @@ def send(sub: dict, payload: dict) -> str:
             data=json.dumps(payload, ensure_ascii=False),
             vapid_private_key=private_key,
             vapid_claims={"sub": os.environ.get("VAPID_SUBJECT", "mailto:alert@example.com")},
-            ttl=3600,
+            ttl=86400,
+            headers={"Urgency": "high"},
+            timeout=10,
         )
         return "ok"
     except WebPushException as e:

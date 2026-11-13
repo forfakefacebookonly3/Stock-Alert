@@ -67,3 +67,28 @@ test("dirFor / wouldFireNow / fmt", () => {
   assert.equal(L.fmt(178), "178.00");
   assert.equal(L.fmt(32.756), "32.76");
 });
+
+test("checkerStale: only after 45 min inside an open window with no run since the open", () => {
+  const T = (iso) => new Date(iso);
+  const old = T("2026-11-12T20:00:00Z").getTime(); // รอบเก่าจากเมื่อวาน
+  // เพิ่งเปิดตลาด รอบล่าสุดเก่า → ยังไม่เตือน
+  assert.equal(L.checkerStale(old, T("2026-11-13T13:20:00Z"), ["US"]), false);
+  assert.equal(L.checkerStale(old, T("2026-11-13T13:44:00Z"), ["US"]), false);
+  // เปิดมา 46 นาทีแล้วยังไม่มีรอบ → เตือน
+  assert.equal(L.checkerStale(old, T("2026-11-13T13:46:00Z"), ["US"]), true);
+  // มีรอบล่าสุดเมื่อเร็วๆ นี้ → ไม่เตือน
+  assert.equal(L.checkerStale(T("2026-11-13T14:10:00Z").getTime(), T("2026-11-13T14:30:00Z"), ["US"]), false);
+  // รอบล่าสุดเกิน 45 นาทีในหน้าต่าง → เตือน
+  assert.equal(L.checkerStale(T("2026-11-13T14:10:00Z").getTime(), T("2026-11-13T15:00:00Z"), ["US"]), true);
+  // ตลาดปิดทั้งหมด / ไม่มีตลาด → ไม่เตือน
+  assert.equal(L.checkerStale(old, T("2026-11-13T11:00:00Z"), ["TH", "US"]), false);
+  assert.equal(L.checkerStale(old, T("2026-11-14T15:00:00Z"), ["US"]), false);
+  assert.equal(L.checkerStale(old, T("2026-11-13T14:00:00Z"), []), false);
+  // ไม่เคยมีรอบ (null/0) แต่เปิดมา 46+ นาที → เตือน
+  assert.equal(L.checkerStale(null, T("2026-11-13T13:46:00Z"), ["US"]), true);
+  assert.equal(L.checkerStale(0, T("2026-11-13T13:46:00Z"), ["US"]), true);
+  assert.equal(L.checkerStale(null, T("2026-11-13T13:20:00Z"), ["US"]), false);
+  // ตลาดที่เปิดอยู่เป็นตลาดที่อยู่ใน markets เท่านั้น
+  assert.equal(L.checkerStale(old, T("2026-11-13T05:00:00Z"), ["US"]), false);
+  assert.equal(L.checkerStale(old, T("2026-11-13T05:00:00Z"), ["US", "TH"]), true);
+});
