@@ -10,6 +10,7 @@ module.exports = async (req, res) => {
     if (out.error) return res.status(out.status).json({ error: out.error });
     return res.status(200).json(publicView(out.data));
   } catch (e) {
+    console.error("subscribe failed:", e && e.message);
     return res.status(502).json({ error: "บันทึกไม่สำเร็จ ลองอีกครั้ง" });
   }
 };

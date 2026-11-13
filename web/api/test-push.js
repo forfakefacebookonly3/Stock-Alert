@@ -14,6 +14,7 @@ module.exports = async (req, res) => {
     if (out.sent + out.failed === 0) return res.status(400).json({ error: "ยังไม่มีเครื่องที่เปิด noti" });
     return res.status(200).json({ sent: out.sent, failed: out.failed });
   } catch (e) {
+    console.error("test-push failed:", e && e.message);
     return res.status(502).json({ error: "ส่ง noti ไม่สำเร็จ" });
   }
 };

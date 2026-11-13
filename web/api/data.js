@@ -6,6 +6,7 @@ module.exports = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json(publicView(data));
   } catch (e) {
+    console.error("data failed:", e && e.message);
     return res.status(502).json({ error: "อ่านข้อมูลไม่ได้" });
   }
 };
