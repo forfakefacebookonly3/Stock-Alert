@@ -44,6 +44,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "GOOGL",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
