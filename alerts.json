@@ -9,6 +9,14 @@
         "auth": "nHbmKkKBfH_BlEKYt7NAAA"
       },
       "ok": false
+    },
+    {
+      "endpoint": "https://fcm.googleapis.com/fcm/send/ffc9eOhp4HI:APA91bHULY1yRqumySNqQ3_BGeCnZhXLyc-FljgapinEdRUken6ZjH3DaRtvJ43Z44lRJpMTK5iSUqjn28L6orwdrV9twSIgp1N-JTYMG-uJLQmtB9ltQ4wdJNYNsXJbuMX_UPMhxs6i",
+      "keys": {
+        "p256dh": "BDzyThyik0vAB02oKQMhkqSkE2mwfJn0MEOzJGbGigOzl7PGBSVikjHTRRR4MdMtVmhNd1ukyJTcVbsHDHponeo",
+        "auth": "7l7Fj2oVnGwSDgU30mm3CA"
+      },
+      "ok": true
     }
   ],
   "symbols": [
