@@ -73,6 +73,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "ASTS",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
