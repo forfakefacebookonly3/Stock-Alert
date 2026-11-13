@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1118">
+  <title>Stock Alert</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="banner" class="banner" hidden></div>
+  <main id="view"></main>
+
+  <div id="sheet-backdrop" class="backdrop" hidden></div>
+  <section id="sheet" class="sheet" hidden aria-modal="true" role="dialog">
+    <h2 id="sheet-title"></h2>
+    <div id="sheet-kinds" class="seg" hidden>
+      <button type="button" data-kind="sl">SL</button>
+      <button type="button" data-kind="tp">TP</button>
+      <button type="button" data-kind="alert">Alert</button>
+    </div>
+    <div class="price-row">
+      <button type="button" id="sheet-minus" class="step" aria-label="ลดราคา">−</button>
+      <input id="sheet-price" type="number" inputmode="decimal" step="0.01" min="0">
+      <button type="button" id="sheet-plus" class="step" aria-label="เพิ่มราคา">＋</button>
+    </div>
+    <p id="sheet-pct" class="muted"></p>
+    <p id="sheet-warn" class="warn" hidden></p>
+    <div class="sheet-actions">
+      <button type="button" id="sheet-cancel" class="btn ghost">ยกเลิก</button>
+      <button type="button" id="sheet-save" class="btn primary">บันทึก</button>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/vendor/lightweight-charts.js"></script>
+  <script src="/logic.js"></script>
+  <script src="/chart.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
