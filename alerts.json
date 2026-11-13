@@ -25,6 +25,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "SAV.BK",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
