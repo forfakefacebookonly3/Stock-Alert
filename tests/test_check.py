@@ -159,3 +159,13 @@ def test_load_accepts_utf8_bom(tmp_path):
     p = tmp_path / "alerts.json"
     p.write_bytes(b"\xef\xbb\xbf" + '{"version":1,"symbols":[{"symbol":"ปตท"}]}'.encode("utf-8"))
     assert check.load(p)["symbols"][0]["symbol"] == "ปตท"
+
+def test_keeps_fibos_marks_and_unknown_keys():
+    d = data()
+    d["symbols"][0]["fibos"] = [{"id": "f1", "t1": "2026-03-12", "p1": 142.3, "t2": "2026-07-08", "p2": 176.85}]
+    d["symbols"][0]["marks"] = [{"id": "m1", "t": "2026-03-12", "kind": "buy", "note": "ซื้อ"}]
+    d["extra"] = {"keep": True}
+    out = check.run(d, NOW, lambda sym: 177.6, lambda sub, payload: "ok")
+    assert out["symbols"][0]["fibos"] == d["symbols"][0]["fibos"]
+    assert out["symbols"][0]["marks"] == d["symbols"][0]["marks"]
+    assert out["extra"] == {"keep": True}
