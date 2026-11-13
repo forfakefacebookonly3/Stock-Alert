@@ -1,0 +1,63 @@
+"""จุดเข้าของตัวเช็ก: โหลด alerts.json → ดึงราคา → ประเมิน → push → บันทึก"""
+from __future__ import annotations
+
+import copy
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+from . import hours, rules
+
+
+def run(data: dict, now: datetime, get_price, send) -> dict:
+    out = copy.deepcopy(data)
+    out.setdefault("push", [])
+    out.setdefault("symbols", [])
+
+    prices: dict[str, float] = {}
+    for symbol in rules.active_symbols(out, hours.open_markets(now)):
+        price = get_price(symbol)
+        if price is not None:
+            prices[symbol] = price
+
+    evaluated, fired = rules.evaluate(out, prices, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    if fired:
+        delivered = 0
+        for f in fired:
+            body = rules.payload(f)
+            for sub in out["push"]:
+                if sub.get("ok", True) is False:
+                    continue
+                result = send(sub, body)
+                if result == "ok":
+                    delivered += 1
+                elif result == "gone":
+                    sub["ok"] = False
+        if delivered:
+            evaluated["push"] = out["push"]
+            out = evaluated
+        else:
+            print(f"  ยิง {len(fired)} รายการแต่ส่ง noti ไม่ได้ — คงสถานะ active ไว้ลองรอบถัดไป")
+
+    out["heartbeat"] = now.strftime("%Y-%m-%d")
+    return out
+
+
+def main() -> None:
+    from . import prices as price_source
+    from . import push
+
+    path = Path(os.environ.get("DATA_FILE", "data/alerts.json"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    now = datetime.now(timezone.utc)
+    out = run(data, now, price_source.last_price, push.send)
+    if out != data:
+        path.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("อัปเดต alerts.json")
+    else:
+        print("ไม่มีการเปลี่ยนแปลง")
+
+
+if __name__ == "__main__":
+    main()
