@@ -79,6 +79,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "SPCX",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
