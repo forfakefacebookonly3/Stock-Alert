@@ -70,7 +70,8 @@ Alert/
     push.py                  ส่ง Web Push ด้วย pywebpush
   tests/                     pytest ของ rules, hours
   .github/workflows/check.yml
-  requirements.txt  README.md  vercel.json
+  requirements.txt  README.md
+  (vercel.json และ package.json อยู่ใน web/ เพราะเป็น Root Directory ของ Vercel)
 ```
 
 ## 3. ข้อมูล — `alerts.json` (branch `data`)
@@ -170,7 +171,7 @@ Alert/
 6. ถ้าข้อมูลเปลี่ยน หรือ `heartbeat` ไม่ใช่วันนี้ → เขียนไฟล์ commit และ push (`git pull --rebase` ก่อน push)
 
 - Log ไม่พิมพ์ endpoint ของ push
-- ถ้าส่ง push ไม่สำเร็จทุกเครื่องด้วยเหตุอื่นที่ไม่ใช่ 404/410: ไม่ทำเครื่องหมาย `fired` เพื่อให้รอบถัดไปลองใหม่
+- ทำเครื่องหมาย `fired` เฉพาะเมื่อส่ง push สำเร็จอย่างน้อย 1 เครื่อง มิฉะนั้นเส้นยัง `active` เพื่อให้รอบถัดไปลองใหม่ (รวมกรณียังไม่มีเครื่องที่เปิด noti)
 
 ### 7.3 กฎ 60 วัน
 Scheduled workflow ใน public repo ถูกปิดอัตโนมัติถ้า repo ไม่มีความเคลื่อนไหว 60 วัน ตัวเช็ก commit `heartbeat` วันละครั้ง (รอบแรกของวัน แม้ไม่มี alert ค้าง) ยังไม่ยืนยันว่า commit บน branch `data` นับเป็นความเคลื่อนไหว — ต้องตรวจตอนติดตั้ง ถ้าไม่นับ ให้ย้าย heartbeat ไปเป็นไฟล์บน `main` (และให้ Vercel ข้าม deploy ของ commit นั้น) ไม่ว่ากรณีใด หน้าแอปมีคำเตือน "ตัวเช็กไม่ทำงาน" (ข้อ 8) เป็นตัวจับ
