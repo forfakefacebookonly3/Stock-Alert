@@ -56,7 +56,7 @@ def test_sl_fires_at_and_below_level():
 def test_tp_and_above_alert_fire_at_and_over_level():
     out, fired = rules.evaluate(data(), {"NVDA": 210.0}, NOW)
     assert [f["kind"] for f in fired] == ["tp", "above"]
-    assert fired[0] == {"symbol": "NVDA", "kind": "tp", "price": 210, "last": 210.0}
+    assert fired[0] == {"symbol": "NVDA", "kind": "tp", "ref": "tp", "price": 210, "last": 210.0}
     assert out["symbols"][0]["alerts"][0]["status"] == "fired"
     assert out["symbols"][0]["alerts"][0]["fired_price"] == 210.0
     assert out["symbols"][0]["alerts"][1]["status"] == "active"
@@ -64,7 +64,7 @@ def test_tp_and_above_alert_fire_at_and_over_level():
 
 def test_above_alert_alone():
     out, fired = rules.evaluate(data(), {"NVDA": 200.0}, NOW)
-    assert fired == [{"symbol": "NVDA", "kind": "above", "price": 200, "last": 200.0}]
+    assert fired == [{"symbol": "NVDA", "kind": "above", "ref": "a1", "price": 200, "last": 200.0}]
 
 
 def test_fired_lines_do_not_fire_again():
@@ -91,3 +91,28 @@ def test_messages():
 def test_payload():
     p = rules.payload({"symbol": "PTT.BK", "kind": "sl", "price": 31.5, "last": 31.25})
     assert p == {"title": "PTT แตะ SL 31.50 (ล่าสุด 31.25)", "body": "แตะเพื่อเปิดกราฟ", "url": "/#/s/PTT.BK"}
+
+
+def test_fired_items_carry_ref_to_the_line():
+    out, fired = rules.evaluate(data(), {"NVDA": 177.6}, NOW)
+    assert [(f["kind"], f["ref"]) for f in fired] == [("sl", "sl"), ("below", "a2")]
+
+
+def test_revert_sl_restores_active_and_leaves_others():
+    out, fired = rules.evaluate(data(), {"NVDA": 177.6}, NOW)
+    sl = next(f for f in fired if f["ref"] == "sl")
+    rules.revert(out, sl)
+    assert out["symbols"][0]["sl"] == {"price": 178, "status": "active"}
+    assert out["symbols"][0]["alerts"][1]["status"] == "fired"
+
+
+def test_revert_alert_by_id_restores_original_dict():
+    out, fired = rules.evaluate(data(), {"NVDA": 200.0}, NOW)
+    a1 = next(f for f in fired if f["ref"] == "a1")
+    rules.revert(out, a1)
+    assert out["symbols"][0]["alerts"][0] == {"id": "a1", "price": 200, "dir": "above", "status": "active"}
+
+
+def test_payload_unchanged_by_ref():
+    f = {"symbol": "NVDA", "kind": "sl", "ref": "sl", "price": 178, "last": 177.6}
+    assert set(rules.payload(f)) == {"title", "body", "url"}

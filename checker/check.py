@@ -22,23 +22,27 @@ def run(data: dict, now: datetime, get_price, send) -> dict:
             prices[symbol] = price
 
     evaluated, fired = rules.evaluate(out, prices, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    if fired:
+    # ตัดสินทีละ alert: เส้นที่ไม่มี push ถึงมือสักเครื่องต้องกลับเป็น active เพื่อลองรอบถัดไป
+    devices = evaluated.setdefault("push", [])
+    kept = 0
+    for f in fired:
+        body = rules.payload(f)
         delivered = 0
-        for f in fired:
-            body = rules.payload(f)
-            for sub in out["push"]:
-                if sub.get("ok", True) is False:
-                    continue
-                result = send(sub, body)
-                if result == "ok":
-                    delivered += 1
-                elif result == "gone":
-                    sub["ok"] = False
+        for sub in devices:
+            if sub.get("ok", True) is False:
+                continue
+            result = send(sub, body)
+            if result == "ok":
+                delivered += 1
+            elif result == "gone":
+                sub["ok"] = False
         if delivered:
-            evaluated["push"] = out["push"]
-            out = evaluated
+            kept += 1
         else:
-            print(f"  ยิง {len(fired)} รายการแต่ส่ง noti ไม่ได้ — คงสถานะ active ไว้ลองรอบถัดไป")
+            rules.revert(evaluated, f)
+    if fired and kept < len(fired):
+        print(f"  ยิง {len(fired)} รายการ ส่ง noti สำเร็จ {kept} — ที่เหลือคงสถานะ active ไว้ลองรอบถัดไป")
+    out = evaluated
 
     out["heartbeat"] = now.strftime("%Y-%m-%d")
     return out

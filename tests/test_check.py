@@ -25,13 +25,33 @@ def data(push=None):
 
 
 class Recorder:
+    """results: endpoint -> result, หรือ endpoint -> list ผลตามลำดับการเรียก (ตัวสุดท้ายใช้ซ้ำ)"""
+
     def __init__(self, results=None):
         self.results = results or {}
         self.sent = []
+        self.calls = {}
 
     def __call__(self, s, payload):
-        self.sent.append((s["endpoint"], payload))
-        return self.results.get(s["endpoint"], "ok")
+        ep = s["endpoint"]
+        self.sent.append((ep, payload))
+        n = self.calls.get(ep, 0)
+        self.calls[ep] = n + 1
+        r = self.results.get(ep, "ok")
+        if isinstance(r, list):
+            return r[min(n, len(r) - 1)]
+        return r
+
+
+def two_us_data(push):
+    d = data(push)
+    d["symbols"][2] = {"symbol": "AAPL", "sl": {"price": 200, "status": "active"}, "tp": None, "alerts": []}
+    del d["symbols"][1]  # PTT.BK ออก เหลือ NVDA, AAPL
+    return d
+
+
+def prices(sym):
+    return {"NVDA": 177.6, "AAPL": 199.0}[sym]
 
 
 def test_only_fetches_open_market_symbols_with_active_lines():
@@ -104,3 +124,32 @@ def test_heartbeat_updates_once_per_day_even_when_markets_closed():
     out = check.run(d, sunday, lambda s: asked.append(s), Recorder())
     assert asked == []
     assert out["heartbeat"] == "2026-11-15"
+
+
+def test_delivery_is_decided_per_alert():
+    send = Recorder({"https://push.example/1": ["ok", "error"]})
+    out = check.run(two_us_data([sub(1)]), NOW, prices, send)
+    assert out["symbols"][0]["sl"] == {
+        "price": 178, "status": "fired", "fired_at": NOW_ISO, "fired_price": 177.6,
+    }
+    assert out["symbols"][1]["sl"] == {"price": 200, "status": "active"}
+    assert out["push"][0]["ok"] is True
+
+
+def test_gone_device_not_resent_and_second_device_covers_both_alerts():
+    send = Recorder({"https://push.example/1": "gone"})
+    out = check.run(two_us_data([sub(1), sub(2)]), NOW, prices, send)
+    assert out["push"][0]["ok"] is False
+    assert out["push"][1]["ok"] is True
+    assert send.calls["https://push.example/1"] == 1
+    assert out["symbols"][0]["sl"]["status"] == "fired"
+    assert out["symbols"][1]["sl"]["status"] == "fired"
+
+
+def test_only_device_gone_on_first_send_keeps_both_active_and_is_not_resent():
+    send = Recorder({"https://push.example/1": "gone"})
+    out = check.run(two_us_data([sub(1)]), NOW, prices, send)
+    assert out["push"][0]["ok"] is False
+    assert out["symbols"][0]["sl"] == {"price": 178, "status": "active"}
+    assert out["symbols"][1]["sl"] == {"price": 200, "status": "active"}
+    assert send.calls["https://push.example/1"] == 1

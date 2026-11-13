@@ -1,4 +1,5 @@
-"""ส่ง Web Push ด้วย pywebpush — ห้ามพิมพ์ endpoint ลง log"""
+"""ส่ง Web Push ด้วย pywebpush — ห้ามพิมพ์ endpoint หรือ key ลง log
+โหมด dry-run ต้องเปิดเองด้วย DRY_RUN=1 เท่านั้น; ถ้าไม่ได้ตั้ง VAPID_PRIVATE_KEY จะคืน "error" (alert คง active)"""
 from __future__ import annotations
 
 import json
@@ -6,11 +7,15 @@ import os
 
 
 def send(sub: dict, payload: dict) -> str:
-    """คืน "ok" | "gone" (404/410 ปลายทางหมดอายุ) | "error" """
-    private_key = os.environ.get("VAPID_PRIVATE_KEY")
-    if not private_key:
+    """คืน "ok" | "gone" (404/410 ปลายทางหมดอายุ) | "error"
+    DRY_RUN=1 → พิมพ์ title แล้วคืน "ok" โดยไม่ส่งจริง; ไม่มี VAPID_PRIVATE_KEY (หรือว่าง) → "error" """
+    if os.environ.get("DRY_RUN") == "1":
         print(f"  [push:dry-run] {payload['title']}")
         return "ok"
+    private_key = os.environ.get("VAPID_PRIVATE_KEY")
+    if not private_key:
+        print("  [push] ไม่ได้ตั้ง VAPID_PRIVATE_KEY — ไม่ได้ส่ง noti")
+        return "error"
     try:
         from pywebpush import WebPushException, webpush
     except Exception as e:

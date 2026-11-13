@@ -36,15 +36,33 @@ def evaluate(data: dict, prices: dict[str, float], now_iso: str) -> tuple[dict, 
         last = prices.get(s["symbol"])
         if last is None:
             continue
-        targets = [("sl", s.get("sl")), ("tp", s.get("tp"))]
-        targets += [(a["dir"], a) for a in s.get("alerts", [])]
-        for kind, line in targets:
+        targets = [("sl", "sl", s.get("sl")), ("tp", "tp", s.get("tp"))]
+        targets += [(a["dir"], a["id"], a) for a in s.get("alerts", [])]
+        for kind, ref, line in targets:
             if _is_active(line) and _hit(kind, line["price"], last):
                 line["status"] = "fired"
                 line["fired_at"] = now_iso
                 line["fired_price"] = last
-                fired.append({"symbol": s["symbol"], "kind": kind, "price": line["price"], "last": last})
+                fired.append({"symbol": s["symbol"], "kind": kind, "ref": ref, "price": line["price"], "last": last})
     return out, fired
+
+
+def revert(data: dict, fired_item: dict) -> None:
+    """คืนเส้นที่ยิงแล้วให้เป็น active (แก้ data ในที่ — ใช้กับสำเนาที่ evaluate คืนมา)
+    ลบ fired_at / fired_price ตาม fired_item["ref"] ("sl" | "tp" | id ของ alert)"""
+    for s in data.get("symbols", []):
+        if s["symbol"] != fired_item["symbol"]:
+            continue
+        ref = fired_item["ref"]
+        if ref in ("sl", "tp"):
+            lines = [s.get(ref)]
+        else:
+            lines = [a for a in s.get("alerts", []) if a.get("id") == ref]
+        for line in lines:
+            if line:
+                line.pop("fired_at", None)
+                line.pop("fired_price", None)
+                line["status"] = "active"
 
 
 def _display(symbol: str) -> str:
