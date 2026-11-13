@@ -42,12 +42,6 @@
       ]
     },
     {
-      "symbol": "SAV.BK",
-      "sl": null,
-      "tp": null,
-      "alerts": []
-    },
-    {
       "symbol": "AMZN",
       "sl": null,
       "tp": null,
@@ -60,6 +54,12 @@
         "price": 360,
         "status": "active"
       },
+      "alerts": []
+    },
+    {
+      "symbol": "SAV.BK",
+      "sl": null,
+      "tp": null,
       "alerts": []
     }
   ]
