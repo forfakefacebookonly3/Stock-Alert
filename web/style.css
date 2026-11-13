@@ -99,3 +99,35 @@ button { cursor: pointer; }
 .arrows { display: flex; gap: 6px; }
 .arrows button { width: 40px; height: 34px; border: 1px solid #2d3b48; border-radius: 8px; background: transparent; color: #cfe0ef; }
 .arrows button:disabled { opacity: .25; }
+
+/* ---------- v2: หน้ากราฟ ---------- */
+.sub { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 16px 8px; }
+.tools { display: flex; gap: 6px; }
+.tbtn { font-size: 12px; padding: 4px 11px; border-radius: 8px; border: 1px solid #2d3b48; background: #121b24; color: #cfe0ef; }
+.tbtn.on { background: #2d6cdf; border-color: #2d6cdf; color: #fff; }
+.tbtn:disabled { opacity: .35; }
+#chart.drawing { touch-action: none; outline: 1px solid #2d6cdf; outline-offset: -1px; }
+.drawbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 16px; background: #101a24; }
+.drawbar .acts { display: flex; align-items: center; gap: 16px; }
+.btn.small { padding: 6px 14px; }
+.btns.off { opacity: .35; pointer-events: none; }
+.c-fibo { color: #e0a64a; }
+.k-buy { color: var(--up); } .k-sell { color: var(--down); } .k-news { color: #3d9cf0; } .k-other { color: var(--muted); }
+.seg.kinds button { font-size: 13px; }
+#msheet-note {
+  width: 100%; margin-top: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 10px 12px; font: 15px/1.6 Georgia, "Noto Serif Thai", serif; color: var(--text); resize: none;
+}
+#msheet-count { text-align: right; margin: 4px 0 0; }
+
+/* รายการ note แบบนิตยสาร */
+.notes { padding: 4px 20px 12px; }
+.notes h3 { font: italic 400 16px/1.3 Georgia, "Noto Serif Thai", serif; color: #cfe0ef; margin: 16px 0 4px; letter-spacing: .3px; }
+.n { display: grid; grid-template-columns: 16px 14px 38px 1fr; gap: 8px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line); font-size: 14px; cursor: pointer; }
+.n .no { color: var(--fired); font-size: 11px; font-variant-numeric: tabular-nums; }
+.n .dt { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.n .tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #dfe7ee; }
+.n.open { background: var(--panel); margin: 0 -20px; padding: 14px 20px; }
+.n.open .tx { white-space: normal; font: 15px/1.7 Georgia, "Noto Serif Thai", serif; color: #eef3f7; }
+.n .acts { grid-column: 4; display: flex; gap: 22px; margin-top: 8px; font-size: 13px; }
+.link.del { color: #ff8a86; }

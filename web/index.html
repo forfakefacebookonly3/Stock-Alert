@@ -35,6 +35,22 @@
     </div>
   </section>
 
+  <section id="msheet" class="sheet" hidden aria-modal="true" role="dialog">
+    <h2 id="msheet-title"></h2>
+    <div id="msheet-kinds" class="seg kinds">
+      <button type="button" data-kind="buy"><span class="k-buy">▲</span> ซื้อ</button>
+      <button type="button" data-kind="sell"><span class="k-sell">▼</span> ขาย</button>
+      <button type="button" data-kind="news"><span class="k-news">●</span> ข่าว</button>
+      <button type="button" data-kind="other"><span class="k-other">■</span> อื่นๆ</button>
+    </div>
+    <textarea id="msheet-note" maxlength="200" rows="3" placeholder="บันทึก (ไม่บังคับ)"></textarea>
+    <p class="muted" id="msheet-count">0/200</p>
+    <div class="sheet-actions">
+      <button type="button" id="msheet-cancel" class="btn ghost">ยกเลิก</button>
+      <button type="button" id="msheet-save" class="btn primary">บันทึก</button>
+    </div>
+  </section>
+
   <div id="toast" class="toast" hidden></div>
 
   <script src="/vendor/lightweight-charts.js"></script>

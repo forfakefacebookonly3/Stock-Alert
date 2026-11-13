@@ -374,6 +374,69 @@ window.Sheet = (function () {
   return { open, close };
 })();
 
+// ---------- mark sheet ----------
+const MARK_SYM = { buy: "▲", sell: "▼", news: "●", other: "■" };
+
+window.MarkSheet = (function () {
+  let cur = null;
+  const el = {
+    sheet: $("#msheet"), backdrop: $("#sheet-backdrop"), title: $("#msheet-title"), kinds: $("#msheet-kinds"),
+    note: $("#msheet-note"), count: $("#msheet-count"), save: $("#msheet-save"), cancel: $("#msheet-cancel"),
+  };
+
+  function refresh() {
+    el.kinds.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.kind === cur.kind));
+    el.count.textContent = `${[...el.note.value].length}/200`;
+    el.save.disabled = !!cur.saving;
+  }
+
+  function open(opts) {
+    cur = { kind: "buy", note: "", ...opts };
+    el.title.textContent = `${Logic.displaySymbol(cur.symbol)} — ${cur.id ? "แก้ mark" : "ปัก mark"} ${Logic.fmtDM(cur.t)}`;
+    el.note.value = cur.note || "";
+    el.sheet.hidden = false;
+    el.backdrop.hidden = false;
+    refresh();
+  }
+
+  function close() {
+    cur = null;
+    el.sheet.hidden = true;
+    el.backdrop.hidden = true;
+  }
+
+  async function save() {
+    const mine = cur;
+    const done = mine.onSaved;
+    const note = el.note.value.trim();
+    const action = mine.id
+      ? { action: "update_mark", symbol: mine.symbol, id: mine.id, kind: mine.kind, note }
+      : { action: "add_mark", symbol: mine.symbol, t: mine.t, kind: mine.kind, note };
+    mine.saving = true;
+    el.save.disabled = true;
+    try {
+      await change(action);
+      if (cur === mine) { close(); toast("บันทึกแล้ว"); }
+      if (done) done();
+    } catch (err) {
+      toast(err.message);
+      mine.saving = false;
+      if (cur === mine) el.save.disabled = false;
+    }
+  }
+
+  el.kinds.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-kind]");
+    if (b && cur) { cur.kind = b.dataset.kind; refresh(); }
+  });
+  el.note.addEventListener("input", () => cur && refresh());
+  el.save.addEventListener("click", () => cur && !cur.saving && save());
+  el.cancel.addEventListener("click", close);
+  el.backdrop.addEventListener("click", close);
+
+  return { open, close };
+})();
+
 // ---------- chart view ----------
 let activeChart = null;
 let chartToken = 0;
@@ -408,6 +471,27 @@ function lineItemHtml(kind, target, line, last) {
     <span class="acts">${acts}<button class="link" data-act="remove" data-kind="${kind}" data-target="${esc(target)}">ลบ</button></span></div>`;
 }
 
+function fiboItemHtml(f) {
+  return `<div class="line-item">
+    <span><span class="c-fibo">Fibo ${Logic.fmt(f.p1)} → ${Logic.fmt(f.p2)}</span> <span class="muted">${esc(Logic.fmtDM(f.t1))} – ${esc(Logic.fmtDM(f.t2))}</span></span>
+    <span class="acts"><button class="link" data-act="remove" data-kind="fibo" data-target="${esc(f.id)}">ลบ</button></span></div>`;
+}
+
+function notesHtml(s, openId) {
+  const marks = Logic.numberMarks(s.marks || []);
+  if (!marks.length) return "";
+  const rows = marks.map((m) => {
+    const open = m.id === openId;
+    const kind = MARK_SYM[m.kind] ? m.kind : "other";
+    const text = m.note ? esc(m.note) : '<span class="muted">—</span>';
+    const acts = open
+      ? '<span class="acts"><button class="link" data-mact="edit">แก้</button><button class="link del" data-mact="remove">ลบ</button></span>'
+      : "";
+    return `<div class="n${open ? " open" : ""}" data-mark="${esc(m.id)}"><span class="no">${m.n}</span><span class="k-${kind}">${MARK_SYM[kind]}</span><span class="dt">${esc(Logic.fmtDM(m.t))}</span><span class="tx">${text}</span>${acts}</div>`;
+  });
+  return `<h3>บันทึก</h3>${rows.join("")}`;
+}
+
 routes.chart = async function renderChart(symbol) {
   if (activeChart) { activeChart.destroy(); activeChart = null; }
   const token = ++chartToken;
@@ -416,15 +500,22 @@ routes.chart = async function renderChart(symbol) {
   const name = esc(Logic.displaySymbol(symbol));
 
   $("#view").innerHTML = `
-    <div class="bar"><a href="#/">‹ ${name}</a><span id="c-price" class="muted">กำลังโหลด…</span><span id="c-trend"></span></div>
+    <div class="bar"><a href="#/">‹ ${name}</a>
+      <span class="tools" hidden>
+        <button type="button" class="tbtn" data-mode="fibo" data-label="Fibo">Fibo</button>
+        <button type="button" class="tbtn" data-mode="mark" data-label="Mark">Mark</button>
+      </span></div>
+    <div class="sub"><span id="c-price" class="muted">กำลังโหลด…</span><span id="c-trend"></span></div>
     <div id="chart"></div>
-    <div class="legend muted"><span style="color:#5aa9ff">━ MA50</span> &nbsp; <span style="color:#b08cff">┅ MA200</span> &nbsp; แตะกราฟค้างเพื่อวางเส้น <span id="c-stale"></span></div>
+    <div class="legend muted"><span style="color:#5aa9ff">━ MA50</span> &nbsp;<span style="color:#b08cff">┅ MA200</span> &nbsp;<span style="color:#9fb6ff">━ RSI 14</span> &nbsp;<span style="color:#e0a64a">━ Fibo</span> <span id="c-stale"></span></div>
+    <div id="c-draw" class="drawbar" hidden></div>
     <div class="btns">
       <button class="btn sl" data-open="sl">SL</button>
       <button class="btn tp" data-open="tp">TP</button>
       <button class="btn al" data-open="alert">＋ Alert</button>
     </div>
     <div id="c-lines"></div>
+    <div id="c-notes" class="notes"></div>
     <div class="stack"><button class="btn danger" id="c-remove">ลบ ${name} ออกจากรายการ</button></div>`;
 
   // ผูกปุ่มลบก่อนรอราคา: หุ้นที่ Yahoo ไม่ให้ข้อมูลแล้วต้องยังลบออกได้
@@ -454,12 +545,19 @@ routes.chart = async function renderChart(symbol) {
   const t = Logic.trendOf(q.candles.map((c) => c.c));
   $("#c-trend").innerHTML = t ? `<span class="trend ${t}">${TREND[t]}</span>` : "";
   $("#c-stale").textContent = q.stale ? "· ข้อมูลเก่า" : "";
+  $(".tools").hidden = false;
+
+  let mode = null;          // null | "fibo" | "mark"
+  let pendingFibo = null;   // Fibo ที่ลากแล้วแต่ยังไม่บันทึก
+  let openMarkId = null;    // แถว note ที่กางอยู่
 
   const openSheet = (kind, price, extra) =>
     Sheet.open({ symbol, last: q.price, kind, price, onSaved: redraw, ...extra });
 
   const chart = AlertChart.create($("#chart"), {
     onLongPress: (price) => openSheet("alert", price, { choose: true }),
+    onFiboDrawn: (f) => { pendingFibo = f; renderDrawbar(); },
+    onMarkTap: (tm) => { setMode(null); MarkSheet.open({ symbol, t: tm, onSaved: redraw }); },
   });
   activeChart = chart;
   chart.setData(q.candles);
@@ -468,13 +566,72 @@ routes.chart = async function renderChart(symbol) {
     const s = find();
     if (!s || activeChart !== chart) return;
     chart.setLines(chartLines(s, q));
+    chart.setFibos(s.fibos || [], pendingFibo);
+    chart.setMarks(Logic.numberMarks(s.marks || []));
     const items = [];
     if (s.tp) items.push(lineItemHtml("tp", "tp", s.tp, q.price));
     s.alerts.slice().sort((a, b) => b.price - a.price).forEach((a) => items.push(lineItemHtml("alert", a.id, a, q.price)));
     if (s.sl) items.push(lineItemHtml("sl", "sl", s.sl, q.price));
+    (s.fibos || []).forEach((f) => items.push(fiboItemHtml(f)));
     $("#c-lines").innerHTML = items.join("");
+    $("#c-notes").innerHTML = notesHtml(s, openMarkId);
   }
+
+  function renderDrawbar() {
+    const bar = $("#c-draw");
+    if (!mode) { bar.hidden = true; bar.innerHTML = ""; return; }
+    bar.hidden = false;
+    if (mode === "mark") { bar.innerHTML = '<span class="muted">แตะแท่งเทียนที่ต้องการปัก mark</span>'; return; }
+    bar.innerHTML = pendingFibo
+      ? `<span class="muted">${Logic.fmt(pendingFibo.p1)} → ${Logic.fmt(pendingFibo.p2)}</span>
+         <span class="acts"><button type="button" class="link" data-draw="redo">วาดใหม่</button><button type="button" class="btn primary small" data-draw="save">บันทึก</button></span>`
+      : '<span class="muted">ลากนิ้วจากจุดเริ่มไปจุดจบ</span>';
+  }
+
+  function setMode(m) {
+    mode = m;
+    pendingFibo = null;
+    chart.setMode(m);
+    document.querySelectorAll("#view .tbtn").forEach((b) => {
+      const on = b.dataset.mode === m;
+      b.classList.toggle("on", on);
+      b.textContent = on ? "ยกเลิก" : b.dataset.label;
+      b.disabled = !!m && !on;
+    });
+    $(".btns").classList.toggle("off", !!m);
+    renderDrawbar();
+    redraw();
+  }
+
   redraw();
+
+  $(".tools").addEventListener("click", (e) => {
+    const b = e.target.closest(".tbtn");
+    if (!b) return;
+    const m = b.dataset.mode;
+    if (mode === m) { setMode(null); return; }
+    const s = find();
+    if (m === "fibo" && (s.fibos || []).length >= 3) { toast("วาด Fibo ได้ไม่เกิน 3 ชุดต่อหุ้น ลบชุดเก่าก่อน"); return; }
+    if (m === "mark" && (s.marks || []).length >= 30) { toast("ปัก mark ได้ไม่เกิน 30 อันต่อหุ้น ลบอันเก่าก่อน"); return; }
+    setMode(m);
+  });
+
+  $("#c-draw").addEventListener("click", async (e) => {
+    const act = e.target.dataset && e.target.dataset.draw;
+    if (act === "redo") { pendingFibo = null; renderDrawbar(); redraw(); return; }
+    if (act !== "save" || !pendingFibo) return;
+    const f = pendingFibo;
+    e.target.disabled = true;
+    try {
+      await change({ action: "add_fibo", symbol, ...f });
+      if (activeChart !== chart) return;
+      setMode(null);
+      toast("บันทึก Fibo แล้ว");
+    } catch (err) {
+      toast(err.message);
+      e.target.disabled = false;
+    }
+  });
 
   $(".btns").addEventListener("click", (e) => {
     const kind = e.target.dataset && e.target.dataset.open;
@@ -496,12 +653,38 @@ routes.chart = async function renderChart(symbol) {
       }
       if (d.act === "rearm") await change({ action: "rearm", symbol, target: d.target });
       if (d.act === "remove") {
-        if (d.kind === "sl") await change({ action: "clear_sl", symbol });
+        if (d.kind === "fibo") await change({ action: "remove_fibo", symbol, id: d.target });
+        else if (d.kind === "sl") await change({ action: "clear_sl", symbol });
         else if (d.kind === "tp") await change({ action: "clear_tp", symbol });
         else await change({ action: "remove_alert", symbol, id: d.target });
       }
       redraw();
     } catch (err) { toast(err.message); }
+  });
+
+  $("#c-notes").addEventListener("click", async (e) => {
+    const row = e.target.closest(".n");
+    if (!row) return;
+    const s = find();
+    const m = (s.marks || []).find((x) => x.id === row.dataset.mark);
+    if (!m) return;
+    const act = e.target.dataset && e.target.dataset.mact;
+    if (act === "edit") {
+      MarkSheet.open({ symbol, t: m.t, id: m.id, kind: m.kind, note: m.note, onSaved: redraw });
+      return;
+    }
+    if (act === "remove") {
+      if (!confirm("ลบ mark นี้?")) return;
+      try {
+        await change({ action: "remove_mark", symbol, id: m.id });
+        openMarkId = null;
+        redraw();
+      } catch (err) { toast(err.message); }
+      return;
+    }
+    openMarkId = openMarkId === m.id ? null : m.id;
+    if (openMarkId) chart.scrollToTime(m.t);
+    redraw();
   });
 };
 
@@ -511,6 +694,7 @@ function route() {
   const hash = location.hash || "#/";
   const m = hash.match(/^#\/s\/(.+)$/);
   if (window.Sheet) window.Sheet.close();
+  if (window.MarkSheet) window.MarkSheet.close();
   if (!m && activeChart) { activeChart.destroy(); activeChart = null; }
   if (m || hash === "#/settings") reorder = null; // ออกจากหน้ารายการ = ทิ้งการจัดลำดับที่ยังไม่บันทึก
   if (m && routes.chart) routes.chart(decodeURIComponent(m[1]));
