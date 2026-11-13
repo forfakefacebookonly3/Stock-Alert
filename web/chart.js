@@ -1,17 +1,88 @@
-// ห่อ lightweight-charts: แท่งรายวัน + MA50/MA200 + เส้นราคา + แตะค้าง
+// ห่อ lightweight-charts 4.1.3: แท่งรายวัน + MA50/MA200 + RSI 14 + เส้นราคา + Fibo + mark + โหมดวาด
 (function (root) {
-  const C = { bg: "#0f1720", grid: "#1e2a36", text: "#8aa0b4", up: "#26a69a", down: "#ef5350", ma50: "#5aa9ff", ma200: "#b08cff" };
+  const C = {
+    bg: "#0f1720", grid: "#1e2a36", text: "#8aa0b4", up: "#26a69a", down: "#ef5350",
+    ma50: "#5aa9ff", ma200: "#b08cff", rsi: "#9fb6ff", fibo: "#e0a64a",
+  };
   const LINE_COLORS = { sl: "#ef5350", tp: "#26a69a", alert: "#f5b83d", fired: "#5c6b7a", ref: "#3a4a5a" };
+  const MARK_STYLE = {
+    buy: { shape: "arrowUp", position: "belowBar", color: "#26a69a" },
+    sell: { shape: "arrowDown", position: "aboveBar", color: "#ef5350" },
+    news: { shape: "circle", position: "aboveBar", color: "#3d9cf0" },
+    other: { shape: "square", position: "aboveBar", color: "#8aa0b4" },
+  };
   const LONG_PRESS_MS = 550;
   const MOVE_TOLERANCE = 10;
+  const VISIBLE_BARS = 252;
+
+  // วาด Fibo เฉพาะช่วงเวลาระหว่างสองจุด (series primitive)
+  class FiboPrimitive {
+    constructor() { this.items = []; this.preview = null; this.chart = null; this.series = null; this.request = null; }
+    attached({ chart, series, requestUpdate }) { this.chart = chart; this.series = series; this.request = requestUpdate; }
+    detached() { this.chart = null; this.series = null; this.request = null; }
+    set(items, preview) {
+      this.items = items || [];
+      this.preview = preview || null;
+      if (this.request) this.request();
+    }
+    updateAllViews() {}
+    paneViews() {
+      return [{ zOrder: () => "top", renderer: () => ({ draw: (target) => this.draw(target) }) }];
+    }
+    draw(target) {
+      if (!this.chart || !this.series) return;
+      const ts = this.chart.timeScale();
+      const y = (p) => this.series.priceToCoordinate(p);
+      const all = this.preview ? [...this.items, { ...this.preview, preview: true }] : this.items;
+      target.useMediaCoordinateSpace(({ context: ctx }) => {
+        for (const f of all) {
+          const x1 = ts.timeToCoordinate(f.t1);
+          const x2 = ts.timeToCoordinate(f.t2);
+          const ya = y(f.p1);
+          const yb = y(f.p2);
+          if (x1 == null || x2 == null || ya == null || yb == null) continue;
+          const left = Math.min(x1, x2);
+          const right = Math.max(x1, x2);
+          const alpha = f.preview ? 0.75 : 1;
+          const levels = Logic.fibLevels(f.p1, f.p2);
+          ctx.save();
+          ctx.strokeStyle = C.fibo;
+          ctx.fillStyle = C.fibo;
+          ctx.lineWidth = 1;
+          ctx.font = "10px system-ui, sans-serif";
+          const y382 = y(levels[1].price);
+          const y618 = y(levels[3].price);
+          if (y382 != null && y618 != null) {
+            ctx.globalAlpha = alpha * 0.1;
+            ctx.fillRect(left, Math.min(y382, y618), right - left, Math.abs(y618 - y382));
+          }
+          ctx.globalAlpha = alpha * 0.7;
+          ctx.setLineDash([2, 3]);
+          ctx.beginPath(); ctx.moveTo(x1, ya); ctx.lineTo(x2, yb); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = alpha;
+          for (const lv of levels) {
+            const ly = y(lv.price);
+            if (ly == null) continue;
+            ctx.beginPath(); ctx.moveTo(left, ly); ctx.lineTo(right, ly); ctx.stroke();
+            ctx.fillText(`${lv.label} · ${Logic.fmt(lv.price)}`, left + 3, ly - 3);
+          }
+          ctx.beginPath(); ctx.arc(x1, ya, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(x2, yb, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      });
+    }
+  }
 
   function create(el, opts) {
+    const o = opts || {};
     const LC = root.LightweightCharts;
     const chart = LC.createChart(el, {
       autoSize: true,
       layout: { background: { color: C.bg }, textColor: C.text },
       grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
-      rightPriceScale: { borderColor: C.grid },
+      rightPriceScale: { borderColor: C.grid, scaleMargins: { top: 0.06, bottom: 0.27 } },
       timeScale: { borderColor: C.grid },
       crosshair: { mode: LC.CrosshairMode.Normal },
     });
@@ -22,16 +93,34 @@
     const lineOpts = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
     const ma50 = chart.addLineSeries({ ...lineOpts, color: C.ma50, lineWidth: 2 });
     const ma200 = chart.addLineSeries({ ...lineOpts, color: C.ma200, lineWidth: 1, lineStyle: LC.LineStyle.Dashed });
-    let priceLines = [];
 
-    function setData(cs) {
+    // RSI อยู่ช่วงล่าง ~20% บน price scale แยก (แกนวันที่ยังอยู่ล่างสุดของกราฟ)
+    const rsi = chart.addLineSeries({
+      ...lineOpts, color: C.rsi, lineWidth: 1, priceScaleId: "rsi",
+      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+    });
+    chart.priceScale("rsi").applyOptions({ scaleMargins: { top: 0.78, bottom: 0.02 } });
+    rsi.createPriceLine({ price: 70, color: "#ef5350", lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: false });
+    rsi.createPriceLine({ price: 30, color: "#26a69a", lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: false });
+
+    const fibo = new FiboPrimitive();
+    candles.attachPrimitive(fibo);
+
+    let cs = [];
+    let priceLines = [];
+    let fiboItems = [];
+    let mode = null;
+
+    function setData(input) {
+      cs = input || [];
       candles.setData(cs.map((c) => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })));
       const closes = cs.map((c) => c.c);
       const toLine = (arr) => arr.map((v, i) => (v == null ? null : { time: cs[i].t, value: v })).filter(Boolean);
       ma50.setData(toLine(Logic.sma(closes, 50)));
       ma200.setData(toLine(Logic.sma(closes, 200)));
+      rsi.setData(toLine(Logic.rsi(closes, 14)));
       if (cs.length) {
-        chart.timeScale().setVisibleRange({ from: cs[Math.max(0, cs.length - 252)].t, to: cs[cs.length - 1].t });
+        chart.timeScale().setVisibleRange({ from: cs[Math.max(0, cs.length - VISIBLE_BARS)].t, to: cs[cs.length - 1].t });
       }
     }
 
@@ -49,32 +138,117 @@
       );
     }
 
-    // แตะค้าง → ราคา ณ จุดที่แตะ
+    function setFibos(items, preview) {
+      fiboItems = items || [];
+      fibo.set(fiboItems, preview || null);
+    }
+
+    function setMarks(marks) {
+      const known = new Set(cs.map((c) => c.t));
+      const list = (marks || [])
+        .filter((m) => known.has(m.t) && MARK_STYLE[m.kind])
+        .slice()
+        .sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : a.n - b.n))
+        .map((m) => ({ time: m.t, ...MARK_STYLE[m.kind], text: String(m.n) }));
+      candles.setMarkers(list);
+    }
+
+    function scrollToTime(t) {
+      const i = cs.findIndex((c) => c.t === t);
+      const r = chart.timeScale().getVisibleLogicalRange();
+      if (i < 0 || !r) return;
+      const half = (r.to - r.from) / 2;
+      chart.timeScale().setVisibleLogicalRange({ from: i - half, to: i + half });
+    }
+
+    // ---------- pointer: แตะค้าง (ปกติ), ลาก Fibo, แตะปัก mark ----------
     let timer = null;
     let start = null;
+    let drag = null;
     const cancel = () => { clearTimeout(timer); timer = null; };
+    const toFibo = (a, b) => ({ t1: a.t, p1: a.p, t2: b.t, p2: b.p });
+    const moved = (e) => start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > MOVE_TOLERANCE;
+
+    function pointAt(e) {
+      const r = el.getBoundingClientRect();
+      const logical = chart.timeScale().coordinateToLogical(e.clientX - r.left);
+      const price = candles.coordinateToPrice(e.clientY - r.top);
+      if (!Number.isFinite(logical) || price == null) return null;
+      return Logic.snapToCandle(cs, logical, price);
+    }
+
     const onDown = (e) => {
       cancel();
       start = { x: e.clientX, y: e.clientY };
+      if (mode === "fibo") {
+        const a = pointAt(e);
+        drag = a ? { a, b: null } : null;
+        return;
+      }
+      if (mode) return;
+      const s0 = start;
       timer = setTimeout(() => {
-        const y = start.y - el.getBoundingClientRect().top;
-        const price = candles.coordinateToPrice(y);
-        if (price != null && price > 0 && opts && opts.onLongPress) opts.onLongPress(Math.round(price * 100) / 100);
+        const price = candles.coordinateToPrice(s0.y - el.getBoundingClientRect().top);
+        if (price != null && price > 0 && o.onLongPress) o.onLongPress(Math.round(price * 100) / 100);
       }, LONG_PRESS_MS);
     };
+
     const onMove = (e) => {
-      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > MOVE_TOLERANCE) cancel();
+      if (mode === "fibo" && drag) {
+        const b = pointAt(e);
+        if (b) { drag.b = b; fibo.set(fiboItems, toFibo(drag.a, b)); }
+        return;
+      }
+      if (moved(e)) cancel();
     };
+
+    const onUp = (e) => {
+      cancel();
+      if (mode === "fibo" && drag) {
+        const { a, b } = drag;
+        drag = null;
+        if (b && b.t !== a.t && b.p !== a.p) {
+          if (o.onFiboDrawn) o.onFiboDrawn(toFibo(a, b));
+        } else {
+          fibo.set(fiboItems, null);
+        }
+      } else if (mode === "mark" && start && !moved(e)) {
+        const p = pointAt(e);
+        if (p && o.onMarkTap) o.onMarkTap(p.t);
+      }
+      start = null;
+    };
+
+    const onCancel = () => {
+      cancel();
+      if (drag) { drag = null; fibo.set(fiboItems, null); }
+      start = null;
+    };
+
+    function setMode(m) {
+      mode = m || null;
+      onCancel();
+      chart.applyOptions({ handleScroll: !mode, handleScale: !mode });
+      el.classList.toggle("drawing", !!mode);
+      fibo.set(fiboItems, null);
+    }
+
     const noMenu = (e) => e.preventDefault();
     el.addEventListener("pointerdown", onDown, true);
     el.addEventListener("pointermove", onMove, true);
-    ["pointerup", "pointercancel", "pointerleave"].forEach((n) => el.addEventListener(n, cancel, true));
+    el.addEventListener("pointerup", onUp, true);
+    el.addEventListener("pointercancel", onCancel, true);
+    el.addEventListener("pointerleave", cancel, true);
     el.addEventListener("contextmenu", noMenu);
 
     return {
       setData,
       setLines,
-      destroy() { cancel(); chart.remove(); },
+      setFibos,
+      setMarks,
+      setMode,
+      scrollToTime,
+      destroy() { onCancel(); chart.remove(); },
     };
   }
 
