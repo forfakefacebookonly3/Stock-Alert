@@ -61,6 +61,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "MSFT",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
