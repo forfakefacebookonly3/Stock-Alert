@@ -72,8 +72,8 @@
       "alerts": [
         {
           "id": "a2",
-          "price": 285,
-          "dir": "below",
+          "price": 295,
+          "dir": "above",
           "status": "active"
         }
       ],
