@@ -104,7 +104,14 @@
       "symbol": "ASTS",
       "sl": null,
       "tp": null,
-      "alerts": []
+      "alerts": [
+        {
+          "id": "a1",
+          "price": 28.2,
+          "dir": "below",
+          "status": "active"
+        }
+      ]
     },
     {
       "symbol": "SPCX",
