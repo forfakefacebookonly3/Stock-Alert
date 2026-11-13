@@ -63,7 +63,14 @@
         "price": 360,
         "status": "active"
       },
-      "alerts": [],
+      "alerts": [
+        {
+          "id": "a1",
+          "price": 283.18,
+          "dir": "below",
+          "status": "active"
+        }
+      ],
       "fibos": [
         {
           "id": "f1",
