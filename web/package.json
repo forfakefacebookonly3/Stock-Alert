@@ -1,0 +1,7 @@
+{
+  "name": "stock-alert-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "test": "node --test" },
+  "dependencies": { "web-push": "^3.6.7" }
+}
