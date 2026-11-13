@@ -24,14 +24,7 @@
       "symbol": "NVDA",
       "sl": null,
       "tp": null,
-      "alerts": [
-        {
-          "id": "a1",
-          "price": 160.68,
-          "dir": "below",
-          "status": "active"
-        }
-      ]
+      "alerts": []
     },
     {
       "symbol": "SAV.BK",
