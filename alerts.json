@@ -91,6 +91,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "RKLB",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
