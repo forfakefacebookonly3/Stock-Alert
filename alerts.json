@@ -38,6 +38,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "AMZN",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
