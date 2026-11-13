@@ -65,12 +65,6 @@
       },
       "alerts": [
         {
-          "id": "a1",
-          "price": 283.18,
-          "dir": "below",
-          "status": "active"
-        },
-        {
           "id": "a2",
           "price": 285,
           "dir": "below",
