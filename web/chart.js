@@ -234,8 +234,10 @@
       const r = el.getBoundingClientRect();
       const logical = chart.timeScale().coordinateToLogical(e.clientX - r.left);
       const price = candles.coordinateToPrice(e.clientY - r.top);
-      if (!Number.isFinite(logical) || price == null) return null;
-      return Logic.snapToCandle(cs, logical, price);
+      if (!Number.isFinite(logical) || price == null || !Number.isFinite(price) || price <= 0 || !cs.length) return null;
+      // ลากอิสระแบบ TradingView: ราคาตรงตำแหน่งนิ้ว (ไม่ดูดเข้าไส้เทียน) แนวเวลาใช้แท่งที่ใกล้ที่สุด
+      const i = Math.min(cs.length - 1, Math.max(0, Math.round(logical)));
+      return { i, t: cs[i].t, p: Math.round(price * 100) / 100 };
     }
 
     const onDown = (e) => {
