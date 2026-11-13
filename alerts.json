@@ -11,5 +11,12 @@
       "ok": true
     }
   ],
-  "symbols": []
+  "symbols": [
+    {
+      "symbol": "NVDA",
+      "sl": null,
+      "tp": null,
+      "alerts": []
+    }
+  ]
 }
