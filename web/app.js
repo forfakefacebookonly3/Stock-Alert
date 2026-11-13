@@ -477,7 +477,7 @@ function lineItemHtml(kind, target, line, last) {
 function fiboItemHtml(f) {
   return `<div class="line-item">
     <span><span class="c-fibo">Fibo ${Logic.fmt(f.p1)} → ${Logic.fmt(f.p2)}</span> <span class="muted">${esc(Logic.fmtDM(f.t1))} – ${esc(Logic.fmtDM(f.t2))}</span></span>
-    <span class="acts"><button class="link" data-act="remove" data-kind="fibo" data-target="${esc(f.id)}">ลบ</button></span></div>`;
+    <span class="acts"><button class="link" data-act="edit" data-kind="fibo" data-target="${esc(f.id)}">แก้</button><button class="link" data-act="remove" data-kind="fibo" data-target="${esc(f.id)}">ลบ</button></span></div>`;
 }
 
 function notesHtml(s, openId) {
@@ -554,6 +554,7 @@ routes.chart = async function renderChart(symbol) {
   let pendingFibo = null;   // Fibo ที่ลากแล้วแต่ยังไม่บันทึก
   let openMarkId = null;    // แถว note ที่กางอยู่
   let savingFibo = false;   // กำลังบันทึก Fibo: ล็อกการลาก/ปุ่มใน drawbar
+  let editingFiboId = null; // กำลังแก้ Fibo ที่บันทึกแล้ว (null = วาดชุดใหม่)
 
   const openSheet = (kind, price, extra) =>
     Sheet.open({ symbol, last: q.price, kind, price, onSaved: redraw, ...extra });
@@ -570,7 +571,8 @@ routes.chart = async function renderChart(symbol) {
     const s = find();
     if (!s || activeChart !== chart) return;
     chart.setLines(chartLines(s, q));
-    chart.setFibos(s.fibos || [], pendingFibo);
+    // ชุดที่กำลังแก้แสดงเป็นแบบมีจุดจับแทนชุดเดิม
+    chart.setFibos((s.fibos || []).filter((f) => f.id !== editingFiboId), pendingFibo);
     chart.setMarks(Logic.numberMarks(s.marks || []));
     const items = [];
     if (s.tp) items.push(lineItemHtml("tp", "tp", s.tp, q.price));
@@ -587,7 +589,7 @@ routes.chart = async function renderChart(symbol) {
     bar.hidden = false;
     if (mode === "mark") { bar.innerHTML = '<span class="muted">แตะแท่งเทียนที่ต้องการปัก mark</span>'; return; }
     bar.innerHTML = pendingFibo
-      ? `<span class="muted">${Logic.fmt(pendingFibo.p1)} → ${Logic.fmt(pendingFibo.p2)}</span>
+      ? `<span class="muted">${Logic.fmt(pendingFibo.p1)} → ${Logic.fmt(pendingFibo.p2)}<br>ลากจุดวงกลมเพื่อปรับ · ลากกลางชุดเพื่อย้าย</span>
          <span class="acts"><button type="button" class="link" data-draw="redo">วาดใหม่</button><button type="button" class="btn primary small" data-draw="save"${savingFibo ? " disabled" : ""}>บันทึก</button></span>`
       : '<span class="muted">ลากนิ้วจากจุดเริ่มไปจุดจบ</span>';
   }
@@ -595,6 +597,7 @@ routes.chart = async function renderChart(symbol) {
   function setMode(m) {
     mode = m;
     pendingFibo = null;
+    editingFiboId = null;
     chart.setMode(m);
     document.querySelectorAll("#view .tbtn").forEach((b) => {
       const on = b.dataset.mode === m;
@@ -634,8 +637,11 @@ routes.chart = async function renderChart(symbol) {
     const f = pendingFibo;
     savingFibo = true;
     e.target.disabled = true;
+    const pts = { t1: f.t1, p1: f.p1, t2: f.t2, p2: f.p2 };
     try {
-      await change({ action: "add_fibo", symbol, ...f });
+      await change(editingFiboId
+        ? { action: "update_fibo", symbol, id: editingFiboId, ...pts }
+        : { action: "add_fibo", symbol, ...pts });
       if (activeChart !== chart) return;
       savingFibo = false;
       setMode(null);
@@ -661,6 +667,16 @@ routes.chart = async function renderChart(symbol) {
     if (!d.act) return;
     const s = find();
     try {
+      if (d.act === "edit" && d.kind === "fibo") {
+        const f = (s.fibos || []).find((x) => x.id === d.target);
+        if (!f) return;
+        setMode("fibo");
+        editingFiboId = f.id;
+        pendingFibo = { t1: f.t1, p1: f.p1, t2: f.t2, p2: f.p2 };
+        renderDrawbar();
+        redraw();
+        return;
+      }
       if (d.act === "edit") {
         const line = d.kind === "sl" ? s.sl : d.kind === "tp" ? s.tp : s.alerts.find((a) => a.id === d.target);
         openSheet(d.kind, line.price, d.kind === "alert" ? { id: d.target } : {});

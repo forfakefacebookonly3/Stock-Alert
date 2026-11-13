@@ -67,8 +67,21 @@
             ctx.beginPath(); ctx.moveTo(left, ly); ctx.lineTo(right, ly); ctx.stroke();
             ctx.fillText(`${lv.label} · ${Logic.fmt(lv.price)}`, left + 3, ly - 3);
           }
-          ctx.beginPath(); ctx.arc(x1, ya, 3, 0, Math.PI * 2); ctx.fill();
-          ctx.beginPath(); ctx.arc(x2, yb, 3, 0, Math.PI * 2); ctx.fill();
+          if (f.preview) {
+            // จุดจับที่ลากปรับได้: วงใหญ่พอให้นิ้วแตะโดน
+            for (const [hx, hy] of [[x1, ya], [x2, yb]]) {
+              ctx.globalAlpha = 0.25;
+              ctx.beginPath(); ctx.arc(hx, hy, 14, 0, Math.PI * 2); ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.fillStyle = C.bg;
+              ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = C.fibo;
+            }
+          } else {
+            ctx.beginPath(); ctx.arc(x1, ya, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x2, yb, 3, 0, Math.PI * 2); ctx.fill();
+          }
           ctx.restore();
         }
       });
@@ -230,23 +243,87 @@
     const toFibo = (a, b) => ({ t1: a.t, p1: a.p, t2: b.t, p2: b.p });
     const moved = (e) => start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > MOVE_TOLERANCE;
 
-    function pointAt(e) {
+    const HANDLE_HIT = 26; // px รอบจุดปลายที่นับว่าแตะโดนจุดจับ
+    const clampIdx = (i) => Math.min(cs.length - 1, Math.max(0, i));
+    const round2 = (p) => Math.round(p * 100) / 100;
+
+    // ตำแหน่งนิ้วเป็น logical index (ทศนิยม) และราคา (ไม่ปัด)
+    function rawAt(e) {
       const r = el.getBoundingClientRect();
-      const logical = chart.timeScale().coordinateToLogical(e.clientX - r.left);
-      const price = candles.coordinateToPrice(e.clientY - r.top);
-      if (!Number.isFinite(logical) || price == null || !Number.isFinite(price) || price <= 0 || !cs.length) return null;
-      // ลากอิสระแบบ TradingView: ราคาตรงตำแหน่งนิ้ว (ไม่ดูดเข้าไส้เทียน) แนวเวลาใช้แท่งที่ใกล้ที่สุด
-      const i = Math.min(cs.length - 1, Math.max(0, Math.round(logical)));
-      return { i, t: cs[i].t, p: Math.round(price * 100) / 100 };
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      const logical = chart.timeScale().coordinateToLogical(x);
+      const price = candles.coordinateToPrice(y);
+      if (!Number.isFinite(logical) || price == null || !Number.isFinite(price) || !cs.length) return null;
+      return { x, y, logical, price };
     }
+
+    function pointAt(e) {
+      const raw = rawAt(e);
+      if (!raw || raw.price <= 0) return null;
+      // ลากอิสระแบบ TradingView: ราคาตรงตำแหน่งนิ้ว (ไม่ดูดเข้าไส้เทียน) แนวเวลาใช้แท่งที่ใกล้ที่สุด
+      const i = clampIdx(Math.round(raw.logical));
+      return { i, t: cs[i].t, p: round2(raw.price) };
+    }
+
+    // แตะโดนอะไรของ Fibo ที่ยังไม่บันทึก: "a" จุดเริ่ม, "b" จุดจบ, "move" ตัว Fibo, null ไม่โดน
+    function hitPending(e) {
+      if (!pendingPreview) return null;
+      const raw = rawAt(e);
+      if (!raw) return null;
+      const ts = chart.timeScale();
+      const x1 = ts.timeToCoordinate(pendingPreview.t1);
+      const x2 = ts.timeToCoordinate(pendingPreview.t2);
+      const ya = candles.priceToCoordinate(pendingPreview.p1);
+      const yb = candles.priceToCoordinate(pendingPreview.p2);
+      if (x1 == null || x2 == null || ya == null || yb == null) return null;
+      const da = Math.hypot(raw.x - x1, raw.y - ya);
+      const db = Math.hypot(raw.x - x2, raw.y - yb);
+      if (Math.min(da, db) <= HANDLE_HIT) return da <= db ? "a" : "b";
+      const pad = 6;
+      if (raw.x >= Math.min(x1, x2) - pad && raw.x <= Math.max(x1, x2) + pad &&
+          raw.y >= Math.min(ya, yb) - pad && raw.y <= Math.max(ya, yb) + pad) return "move";
+      return null;
+    }
+
+    function dragged(e) {
+      if (drag.kind === "new") {
+        const b = pointAt(e);
+        return b ? toFibo(drag.a, b) : null;
+      }
+      if (drag.kind === "a" || drag.kind === "b") {
+        const p = pointAt(e);
+        if (!p) return null;
+        return drag.kind === "a" ? { ...drag.base, t1: p.t, p1: p.p } : { ...drag.base, t2: p.t, p2: p.p };
+      }
+      // move: เลื่อนทั้งชุดตามระยะที่นิ้วขยับ
+      const raw = rawAt(e);
+      if (!raw) return null;
+      const di = Math.round(raw.logical - drag.r0.logical);
+      const dp = raw.price - drag.r0.price;
+      const i1 = clampIdx(cs.findIndex((c) => c.t === drag.base.t1) + di);
+      const i2 = clampIdx(cs.findIndex((c) => c.t === drag.base.t2) + di);
+      const p1 = round2(drag.base.p1 + dp);
+      const p2 = round2(drag.base.p2 + dp);
+      if (p1 <= 0 || p2 <= 0) return null;
+      return { t1: cs[i1].t, p1, t2: cs[i2].t, p2 };
+    }
+
+    const validFibo = (f) => f && f.t1 !== f.t2 && f.p1 !== f.p2;
 
     const onDown = (e) => {
       if (!e.isPrimary) return;
       cancel();
       start = { x: e.clientX, y: e.clientY };
       if (mode === "fibo") {
+        const hit = hitPending(e);
+        if (hit) {
+          const r0 = rawAt(e);
+          drag = { kind: hit, base: { ...pendingPreview }, r0, cur: null };
+          return;
+        }
         const a = pointAt(e);
-        drag = a ? { a, b: null } : null;
+        drag = a ? { kind: "new", a, cur: null } : null;
         return;
       }
       if (mode) return;
@@ -260,8 +337,8 @@
     const onMove = (e) => {
       if (!e.isPrimary) return;
       if (mode === "fibo" && drag) {
-        const b = pointAt(e);
-        if (b) { drag.b = b; fibo.set(fiboItems, toFibo(drag.a, b)); }
+        const next = dragged(e);
+        if (next) { drag.cur = next; fibo.set(fiboItems, next); }
         return;
       }
       if (moved(e)) cancel();
@@ -271,10 +348,10 @@
       if (!e.isPrimary) return;
       cancel();
       if (mode === "fibo" && drag) {
-        const { a, b } = drag;
+        const next = drag.cur;
         drag = null;
-        if (b && b.t !== a.t && b.p !== a.p) {
-          pendingPreview = toFibo(a, b);
+        if (validFibo(next)) {
+          pendingPreview = next;
           if (o.onFiboDrawn) o.onFiboDrawn(pendingPreview);
         } else {
           fibo.set(fiboItems, pendingPreview);

@@ -19,6 +19,13 @@ const validDate = (t) => typeof t === "string" && DATE_RE.test(t);
 const active = (price) => ({ price, status: "active" });
 const nextId = (list, prefix) => prefix + (1 + Math.max(0, ...list.map((x) => parseInt(String(x.id).slice(1), 10) || 0)));
 
+function fiboError(a) {
+  if (!validDate(a.t1) || !validDate(a.t2)) return err("วันที่ไม่ถูกต้อง");
+  if (!validPrice(a.p1) || !validPrice(a.p2)) return err("ราคาไม่ถูกต้อง");
+  if (a.t1 === a.t2 || a.p1 === a.p2) return err("Fibo ต้องมีสองจุดที่ต่างกัน");
+  return null;
+}
+
 function cleanNote(note) {
   if (note === undefined || note === null) return { note: "" };
   if (typeof note !== "string") return err("บันทึกไม่ถูกต้อง");
@@ -102,11 +109,19 @@ function applyChange(data, action) {
     }
     case "add_fibo": {
       const fibos = (s.fibos = s.fibos || []);
-      if (!validDate(a.t1) || !validDate(a.t2)) return err("วันที่ไม่ถูกต้อง");
-      if (!validPrice(a.p1) || !validPrice(a.p2)) return err("ราคาไม่ถูกต้อง");
-      if (a.t1 === a.t2 || a.p1 === a.p2) return err("Fibo ต้องมีสองจุดที่ต่างกัน");
+      const bad = fiboError(a);
+      if (bad) return bad;
       if (fibos.length >= MAX_FIBOS) return err(`วาด Fibo ได้ไม่เกิน ${MAX_FIBOS} ชุดต่อหุ้น`);
       fibos.push({ id: nextId(fibos, "f"), t1: a.t1, p1: a.p1, t2: a.t2, p2: a.p2 });
+      break;
+    }
+    case "update_fibo": {
+      const fibos = s.fibos || [];
+      const i = fibos.findIndex((f) => f.id === a.id);
+      if (i < 0) return err("ไม่พบ Fibo นี้");
+      const bad = fiboError(a);
+      if (bad) return bad;
+      fibos[i] = { id: fibos[i].id, t1: a.t1, p1: a.p1, t2: a.t2, p2: a.p2 };
       break;
     }
     case "remove_fibo": {

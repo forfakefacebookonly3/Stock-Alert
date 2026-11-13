@@ -167,3 +167,15 @@ test("add / update / remove mark: shape, validation, limits", () => {
   assert.equal(d.symbols[0].marks.length, 30);
   assert.match(C.applyChange(d, { action: "add_mark", symbol: "NVDA", t: "2026-01-02", kind: "other" }).error, /30/);
 });
+
+test("update_fibo: replaces points of one Fibo, validates, keeps id and others", () => {
+  let d = ok(C.applyChange(base(), { action: "add_fibo", symbol: "NVDA", ...F }));
+  d = ok(C.applyChange(d, { action: "add_fibo", symbol: "NVDA", ...F, p2: 190 }));
+  const G = { t1: "2026-04-01", p1: 150, t2: "2026-08-03", p2: 201.5 };
+  const out = ok(C.applyChange(d, { action: "update_fibo", symbol: "NVDA", id: "f1", ...G }));
+  assert.deepEqual(out.symbols[0].fibos, [{ id: "f1", ...G }, { id: "f2", ...F, p2: 190 }]);
+  assert.match(C.applyChange(d, { action: "update_fibo", symbol: "NVDA", id: "f9", ...G }).error, /ไม่พบ/);
+  for (const b of [{ t1: "1/4/2026" }, { t2: G.t1 }, { p1: -1 }, { p2: G.p1 }]) {
+    assert.ok(C.applyChange(d, { action: "update_fibo", symbol: "NVDA", id: "f1", ...G, ...b }).error, JSON.stringify(b));
+  }
+});
