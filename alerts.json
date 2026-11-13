@@ -75,7 +75,15 @@
       "symbol": "MSFT",
       "sl": null,
       "tp": null,
-      "alerts": []
+      "alerts": [],
+      "marks": [
+        {
+          "id": "m1",
+          "t": "2026-11-11",
+          "kind": "other",
+          "note": "ลองพิมพ์ดูว่าจะยาวแค่ไหน จนกว่าจะเต็มแถว"
+        }
+      ]
     },
     {
       "symbol": "TMDX",
