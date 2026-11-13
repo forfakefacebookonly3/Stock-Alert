@@ -1,5 +1,5 @@
 // Service worker: cache หน้าแอป (ไม่ cache /api/) + รับ Web Push
-const CACHE = "alert-shell-v2";
+const CACHE = "alert-shell-v3";
 const SHELL = ["/", "/style.css", "/logic.js", "/chart.js", "/app.js", "/vendor/lightweight-charts.js", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -38,7 +38,7 @@ self.addEventListener("push", (e) => {
     self.registration.showNotification(p.title || "Stock Alert", {
       body: p.body || "",
       icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
       data: { url: p.url || "/" },
     })
   );
