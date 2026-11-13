@@ -168,6 +168,8 @@ routes.list = function renderList() {
   });
 
   $("#rows").addEventListener("click", (e) => {
+    const rb2 = $("#reorder-btn");
+    if (rb2 && rb2.disabled) return;
     const b = e.target.closest("button[data-move]");
     if (!b || !reorder) return;
     const i = Number(b.dataset.i);
@@ -378,6 +380,7 @@ window.Sheet = (function () {
 const MARK_SYM = { buy: "▲", sell: "▼", news: "●", other: "■" };
 
 window.MarkSheet = (function () {
+  if (!$("#msheet")) return { open() { toast("โหลดแอปใหม่อีกครั้งเพื่อใช้ Mark"); }, close() {} };
   let cur = null;
   const el = {
     sheet: $("#msheet"), backdrop: $("#sheet-backdrop"), title: $("#msheet-title"), kinds: $("#msheet-kinds"),
@@ -550,13 +553,14 @@ routes.chart = async function renderChart(symbol) {
   let mode = null;          // null | "fibo" | "mark"
   let pendingFibo = null;   // Fibo ที่ลากแล้วแต่ยังไม่บันทึก
   let openMarkId = null;    // แถว note ที่กางอยู่
+  let savingFibo = false;   // กำลังบันทึก Fibo: ล็อกการลาก/ปุ่มใน drawbar
 
   const openSheet = (kind, price, extra) =>
     Sheet.open({ symbol, last: q.price, kind, price, onSaved: redraw, ...extra });
 
   const chart = AlertChart.create($("#chart"), {
     onLongPress: (price) => openSheet("alert", price, { choose: true }),
-    onFiboDrawn: (f) => { pendingFibo = f; renderDrawbar(); },
+    onFiboDrawn: (f) => { if (savingFibo) return; pendingFibo = f; renderDrawbar(); },
     onMarkTap: (tm) => { setMode(null); MarkSheet.open({ symbol, t: tm, onSaved: redraw }); },
   });
   activeChart = chart;
@@ -584,7 +588,7 @@ routes.chart = async function renderChart(symbol) {
     if (mode === "mark") { bar.innerHTML = '<span class="muted">แตะแท่งเทียนที่ต้องการปัก mark</span>'; return; }
     bar.innerHTML = pendingFibo
       ? `<span class="muted">${Logic.fmt(pendingFibo.p1)} → ${Logic.fmt(pendingFibo.p2)}</span>
-         <span class="acts"><button type="button" class="link" data-draw="redo">วาดใหม่</button><button type="button" class="btn primary small" data-draw="save">บันทึก</button></span>`
+         <span class="acts"><button type="button" class="link" data-draw="redo">วาดใหม่</button><button type="button" class="btn primary small" data-draw="save"${savingFibo ? " disabled" : ""}>บันทึก</button></span>`
       : '<span class="muted">ลากนิ้วจากจุดเริ่มไปจุดจบ</span>';
   }
 
@@ -599,6 +603,12 @@ routes.chart = async function renderChart(symbol) {
       b.disabled = !!m && !on;
     });
     $(".btns").classList.toggle("off", !!m);
+    for (const sel of ["#c-lines", "#c-notes"]) {
+      const lockEl = $(sel);
+      lockEl.classList.toggle("off", !!m);
+      lockEl.style.pointerEvents = m ? "none" : "";
+      lockEl.style.opacity = m ? ".35" : "";
+    }
     renderDrawbar();
     redraw();
   }
@@ -617,19 +627,24 @@ routes.chart = async function renderChart(symbol) {
   });
 
   $("#c-draw").addEventListener("click", async (e) => {
+    if (savingFibo) return;
     const act = e.target.dataset && e.target.dataset.draw;
     if (act === "redo") { pendingFibo = null; renderDrawbar(); redraw(); return; }
     if (act !== "save" || !pendingFibo) return;
     const f = pendingFibo;
+    savingFibo = true;
     e.target.disabled = true;
     try {
       await change({ action: "add_fibo", symbol, ...f });
       if (activeChart !== chart) return;
+      savingFibo = false;
       setMode(null);
       toast("บันทึก Fibo แล้ว");
     } catch (err) {
       toast(err.message);
-      e.target.disabled = false;
+    } finally {
+      savingFibo = false;
+      if (activeChart === chart && mode === "fibo") renderDrawbar();
     }
   });
 

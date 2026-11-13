@@ -75,6 +75,44 @@
     }
   }
 
+  // แถบ RSI: เส้นคั่น + ป้ายชื่อ/ค่าล่าสุด + ป้าย 70/30 (overlay scale "rsi" ไม่มีแกนใน 4.1.3)
+  class RsiBandPrimitive {
+    constructor(onBand) { this.last = null; this.series = null; this.request = null; this.onBand = onBand; }
+    attached({ series, requestUpdate }) { this.series = series; this.request = requestUpdate; }
+    detached() { this.series = null; this.request = null; }
+    setLast(v) { this.last = v; if (this.request) this.request(); }
+    updateAllViews() {}
+    paneViews() {
+      return [{ zOrder: () => "top", renderer: () => ({ draw: (target) => this.draw(target) }) }];
+    }
+    draw(target) {
+      if (!this.series) return;
+      const top = this.series.priceToCoordinate(100);
+      if (top == null) { this.onBand(null); return; }
+      const sepY = top - 4;
+      this.onBand(sepY);
+      const y70 = this.series.priceToCoordinate(70);
+      const y30 = this.series.priceToCoordinate(30);
+      target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+        const w = mediaSize.width;
+        ctx.save();
+        ctx.strokeStyle = C.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, Math.round(sepY) + 0.5); ctx.lineTo(w, Math.round(sepY) + 0.5); ctx.stroke();
+        ctx.font = "10px system-ui, sans-serif";
+        ctx.fillStyle = C.rsi;
+        ctx.textBaseline = "top";
+        ctx.fillText(`RSI 14 · ${this.last == null ? "—" : this.last.toFixed(1)}`, 4, sepY + 3);
+        ctx.fillStyle = C.text;
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        if (y70 != null) ctx.fillText("70", w - 3, y70);
+        if (y30 != null) ctx.fillText("30", w - 3, y30);
+        ctx.restore();
+      });
+    }
+  }
+
   function create(el, opts) {
     const o = opts || {};
     const LC = root.LightweightCharts;
@@ -86,7 +124,10 @@
       timeScale: { borderColor: C.grid },
       crosshair: { mode: LC.CrosshairMode.Normal },
     });
+    // ราคาที่ต่ำกว่าเส้นคั่นแถบ RSI ไม่แสดงบนแกนขวา (กันสับสนกับค่า RSI)
+    let bandFloor = null;
     const candles = chart.addCandlestickSeries({
+      priceFormat: { type: "custom", minMove: 0.01, formatter: (p) => (bandFloor != null && p < bandFloor ? "" : p.toFixed(2)) },
       upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down,
       wickUpColor: C.up, wickDownColor: C.down,
     });
@@ -105,11 +146,17 @@
 
     const fibo = new FiboPrimitive();
     candles.attachPrimitive(fibo);
+    const rsiBand = new RsiBandPrimitive((sepY) => {
+      const v = sepY == null ? null : candles.coordinateToPrice(sepY);
+      bandFloor = v == null || !Number.isFinite(v) ? null : v;
+    });
+    rsi.attachPrimitive(rsiBand);
 
     let cs = [];
     let priceLines = [];
     let fiboItems = [];
     let mode = null;
+    let pendingPreview = null;
 
     function setData(input) {
       cs = input || [];
@@ -118,7 +165,9 @@
       const toLine = (arr) => arr.map((v, i) => (v == null ? null : { time: cs[i].t, value: v })).filter(Boolean);
       ma50.setData(toLine(Logic.sma(closes, 50)));
       ma200.setData(toLine(Logic.sma(closes, 200)));
-      rsi.setData(toLine(Logic.rsi(closes, 14)));
+      const rsiPts = toLine(Logic.rsi(closes, 14));
+      rsi.setData(rsiPts);
+      rsiBand.setLast(rsiPts.length ? rsiPts[rsiPts.length - 1].value : null);
       if (cs.length) {
         chart.timeScale().setVisibleRange({ from: cs[Math.max(0, cs.length - VISIBLE_BARS)].t, to: cs[cs.length - 1].t });
       }
@@ -140,7 +189,8 @@
 
     function setFibos(items, preview) {
       fiboItems = items || [];
-      fibo.set(fiboItems, preview || null);
+      pendingPreview = preview || null;
+      fibo.set(fiboItems, pendingPreview);
     }
 
     function setMarks(marks) {
@@ -178,6 +228,7 @@
     }
 
     const onDown = (e) => {
+      if (!e.isPrimary) return;
       cancel();
       start = { x: e.clientX, y: e.clientY };
       if (mode === "fibo") {
@@ -194,6 +245,7 @@
     };
 
     const onMove = (e) => {
+      if (!e.isPrimary) return;
       if (mode === "fibo" && drag) {
         const b = pointAt(e);
         if (b) { drag.b = b; fibo.set(fiboItems, toFibo(drag.a, b)); }
@@ -203,14 +255,16 @@
     };
 
     const onUp = (e) => {
+      if (!e.isPrimary) return;
       cancel();
       if (mode === "fibo" && drag) {
         const { a, b } = drag;
         drag = null;
         if (b && b.t !== a.t && b.p !== a.p) {
-          if (o.onFiboDrawn) o.onFiboDrawn(toFibo(a, b));
+          pendingPreview = toFibo(a, b);
+          if (o.onFiboDrawn) o.onFiboDrawn(pendingPreview);
         } else {
-          fibo.set(fiboItems, null);
+          fibo.set(fiboItems, pendingPreview);
         }
       } else if (mode === "mark" && start && !moved(e)) {
         const p = pointAt(e);
@@ -221,12 +275,13 @@
 
     const onCancel = () => {
       cancel();
-      if (drag) { drag = null; fibo.set(fiboItems, null); }
+      if (drag) { drag = null; fibo.set(fiboItems, pendingPreview); }
       start = null;
     };
 
     function setMode(m) {
       mode = m || null;
+      pendingPreview = null;
       onCancel();
       chart.applyOptions({ handleScroll: !mode, handleScale: !mode });
       el.classList.toggle("drawing", !!mode);

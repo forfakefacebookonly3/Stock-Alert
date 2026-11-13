@@ -1,6 +1,6 @@
 // Service worker: cache หน้าแอป (ไม่ cache /api/) + รับ Web Push
 const CACHE = "alert-shell-v3";
-const SHELL = ["/", "/style.css", "/logic.js", "/chart.js", "/app.js", "/vendor/lightweight-charts.js", "/icons/icon-192.png"];
+const SHELL = ["/", "/style.css", "/logic.js", "/chart.js", "/app.js", "/vendor/lightweight-charts.js", "/icons/icon-192.png", "/icons/badge-96.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
