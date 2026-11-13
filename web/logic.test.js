@@ -92,3 +92,54 @@ test("checkerStale: only after 45 min inside an open window with no run since th
   assert.equal(L.checkerStale(old, T("2026-11-13T05:00:00Z"), ["US"]), false);
   assert.equal(L.checkerStale(old, T("2026-11-13T05:00:00Z"), ["US", "TH"]), true);
 });
+
+test("rsi: Wilder smoothing and edge cases", () => {
+  assert.deepEqual(L.rsi([1, 2, 1, 2], 2), [null, null, 50, 75]);
+  assert.deepEqual(L.rsi([1, 2], 2), [null, null]);
+  const up = L.rsi(series(20, (i) => 10 + i), 14);
+  assert.equal(up.length, 20);
+  assert.equal(up[13], null);
+  assert.equal(up[14], 100);
+  assert.equal(up[19], 100);
+  assert.equal(L.rsi(series(20, (i) => 50 - i), 14)[19], 0);
+  assert.equal(L.rsi(series(20, () => 7), 14)[19], 50);
+});
+
+test("fibLevels: start point = 100%, end point = 0%", () => {
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const lv = L.fibLevels(100, 200);
+  assert.deepEqual(lv.map((x) => x.label), ["0%", "38.2%", "50%", "61.8%", "100%"]);
+  assert.deepEqual(lv.map((x) => r2(x.price)), [200, 161.8, 150, 138.2, 100]);
+  assert.deepEqual(L.fibLevels(200, 100).map((x) => r2(x.price)), [100, 138.2, 150, 161.8, 200]);
+});
+
+test("snapToCandle: nearest bar, nearer of high/low, clamped to data", () => {
+  const cs = [
+    { t: "2026-01-01", h: 12, l: 8 },
+    { t: "2026-01-02", h: 20, l: 15 },
+    { t: "2026-01-05", h: 30, l: 25 },
+  ];
+  assert.deepEqual(L.snapToCandle(cs, 1.3, 19), { i: 1, t: "2026-01-02", p: 20 });
+  assert.deepEqual(L.snapToCandle(cs, 0.6, 16), { i: 1, t: "2026-01-02", p: 15 });
+  assert.deepEqual(L.snapToCandle(cs, -4, 9), { i: 0, t: "2026-01-01", p: 8 });
+  assert.deepEqual(L.snapToCandle(cs, 9.7, 31), { i: 2, t: "2026-01-05", p: 30 });
+  assert.equal(L.snapToCandle([], 1, 1), null);
+});
+
+test("fmtDM: day/month without leading zeros or year", () => {
+  assert.equal(L.fmtDM("2026-07-08"), "8/7");
+  assert.equal(L.fmtDM("2026-12-31"), "31/12");
+});
+
+test("numberMarks: numbered by date (oldest = 1), returned newest first", () => {
+  const ms = [
+    { id: "m1", t: "2026-05-22", kind: "news", note: "b" },
+    { id: "m2", t: "2026-03-12", kind: "buy", note: "a" },
+    { id: "m3", t: "2026-07-08", kind: "sell", note: "c" },
+    { id: "m10", t: "2026-05-22", kind: "other", note: "b2" },
+  ];
+  const out = L.numberMarks(ms);
+  assert.deepEqual(out.map((m) => [m.id, m.n]), [["m3", 4], ["m10", 3], ["m1", 2], ["m2", 1]]);
+  assert.equal(ms[0].n, undefined);
+  assert.deepEqual(L.numberMarks(undefined), []);
+});
