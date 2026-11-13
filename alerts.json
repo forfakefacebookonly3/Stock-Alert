@@ -31,6 +31,14 @@
           "dir": "below",
           "status": "active"
         }
+      ],
+      "marks": [
+        {
+          "id": "m1",
+          "t": "2026-11-12",
+          "kind": "buy",
+          "note": "Jensen ลาออก"
+        }
       ]
     },
     {
