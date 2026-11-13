@@ -146,9 +146,20 @@
 
     const fibo = new FiboPrimitive();
     candles.attachPrimitive(fibo);
+    // ตัวเลขแกนถูกจัดรูปแบบตอนสร้าง tick → เมื่อขอบแถบเปลี่ยน ต้องสั่งให้แกนจัดรูปใหม่ (ทำครั้งเดียวต่อเฟรม; หยุดเองเมื่อค่าไม่เปลี่ยน)
+    let refreshQueued = false;
     const rsiBand = new RsiBandPrimitive((sepY) => {
       const v = sepY == null ? null : candles.coordinateToPrice(sepY);
-      bandFloor = v == null || !Number.isFinite(v) ? null : v;
+      const next = v == null || !Number.isFinite(v) ? null : v;
+      const changed = (next == null) !== (bandFloor == null) || (next != null && Math.abs(next - bandFloor) > Math.abs(bandFloor) * 0.002);
+      bandFloor = next;
+      if (changed && !refreshQueued) {
+        refreshQueued = true;
+        requestAnimationFrame(() => {
+          refreshQueued = false;
+          candles.applyOptions({ priceFormat: { type: "custom", minMove: 0.01, formatter: (p) => (bandFloor != null && p < bandFloor ? "" : p.toFixed(2)) } });
+        });
+      }
     });
     rsi.attachPrimitive(rsiBand);
 
