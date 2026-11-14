@@ -57,10 +57,29 @@ def main() -> None:
     from . import prices as price_source
     from . import push
 
+    from .annotate import notice
+
     path = Path(os.environ.get("DATA_FILE", "data/alerts.json"))
     data = load(path)
     now = datetime.now(timezone.utc)
-    out = run(data, now, price_source.last_price, push.send)
+
+    # จดผลไว้รายงานเป็น annotation (อ่านได้โดยไม่ต้องลงชื่อเข้าใช้)
+    got: dict[str, float | None] = {}
+    sends: list[str] = []
+
+    def get_price(sym):
+        got[sym] = price_source.last_price(sym)
+        return got[sym]
+
+    def send(sub, payload):
+        r = push.send(sub, payload)
+        sends.append(r)
+        return r
+
+    out = run(data, now, get_price, send)
+    markets = ",".join(sorted(hours.open_markets(now))) or "none"
+    priced = " ".join(f"{s}={'FAIL' if p is None else round(p, 2)}" for s, p in got.items()) or "-"
+    notice("check", f"markets={markets} prices: {priced} | pushes: {','.join(sends) or '-'}")
     if out != data:
         path.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("อัปเดต alerts.json")

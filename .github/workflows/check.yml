@@ -7,7 +7,12 @@ on:
     - cron: "7,22,37,52 3-9 * * 1-5"
     # ตลาดสหรัฐ: 20:00–04:59 น. เวลาไทย (ครอบทั้งเวลาออมแสงและเวลาปกติ)
     - cron: "7,22,37,52 13-21 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      diag:
+        description: "ตรวจระบบ: ดึงราคาทุกตัว + ส่ง noti ทดสอบ (ไม่แก้ข้อมูล)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -35,7 +40,16 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Diagnose
+        if: ${{ inputs.diag }}
+        env:
+          DATA_FILE: data/alerts.json
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: python -m checker.diag
+
       - name: Check alerts
+        if: ${{ !inputs.diag }}
         env:
           DATA_FILE: data/alerts.json
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}

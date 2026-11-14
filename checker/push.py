@@ -33,11 +33,19 @@ def send(sub: dict, payload: dict) -> str:
         )
         return "ok"
     except WebPushException as e:
-        status = getattr(getattr(e, "response", None), "status_code", None)
+        from .annotate import warning
+
+        resp = getattr(e, "response", None)
+        status = getattr(resp, "status_code", None)
         if status in (404, 410):
             return "gone"
+        body = (getattr(resp, "text", "") or "")[:200]
         print(f"  [push] ส่งไม่สำเร็จ (HTTP {status})")
+        warning("push", f"HTTP {status}: {body or str(e)[:200]}")
         return "error"
     except Exception as e:
+        from .annotate import warning
+
         print(f"  [push] ส่งไม่สำเร็จ: {type(e).__name__}")
+        warning("push", f"{type(e).__name__}: {e}")
         return "error"
