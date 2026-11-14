@@ -4,6 +4,15 @@ from __future__ import annotations
 
 import json
 import os
+import re
+
+
+def _subject() -> str:
+    """VAPID sub ที่ py_vapid ยอมรับ: "mailto:..." หรือ "https://host" (ห้ามมี path)
+    secret เดิมเป็นลิงก์ repo ที่มี path → ตัดเหลือ scheme+host ไม่งั้นทุกการส่งล้มด้วย VapidException"""
+    sub = (os.environ.get("VAPID_SUBJECT") or "").strip() or "mailto:alert@example.com"
+    m = re.match(r"^(https://[^/]+)", sub)
+    return m.group(1) if m else sub
 
 
 def send(sub: dict, payload: dict) -> str:
@@ -26,7 +35,7 @@ def send(sub: dict, payload: dict) -> str:
             subscription_info={"endpoint": sub["endpoint"], "keys": sub["keys"]},
             data=json.dumps(payload, ensure_ascii=False),
             vapid_private_key=private_key,
-            vapid_claims={"sub": os.environ.get("VAPID_SUBJECT", "mailto:alert@example.com")},
+            vapid_claims={"sub": _subject()},
             ttl=86400,
             headers={"Urgency": "high"},
             timeout=10,

@@ -49,3 +49,18 @@ def test_webpush_called_with_ttl_urgency_and_timeout(monkeypatch):
     assert seen["ttl"] == 86400
     assert seen["headers"] == {"Urgency": "high"}
     assert seen["timeout"] == 10
+
+
+def test_subject_strips_path_so_py_vapid_accepts_it(monkeypatch):
+    from py_vapid import _check_sub
+
+    monkeypatch.setenv("VAPID_SUBJECT", "https://github.com/forfakefacebookonly3/Stock-Alert")
+    assert push._subject() == "https://github.com"
+    assert _check_sub(push._subject())
+
+
+def test_subject_keeps_mailto_and_defaults(monkeypatch):
+    monkeypatch.setenv("VAPID_SUBJECT", "mailto:me@example.com")
+    assert push._subject() == "mailto:me@example.com"
+    monkeypatch.setenv("VAPID_SUBJECT", "  ")
+    assert push._subject() == "mailto:alert@example.com"
