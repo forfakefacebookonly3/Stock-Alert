@@ -137,6 +137,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "GULF.BK",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
