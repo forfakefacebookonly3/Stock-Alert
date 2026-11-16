@@ -74,7 +74,9 @@
           "id": "a2",
           "price": 295,
           "dir": "above",
-          "status": "active"
+          "status": "fired",
+          "fired_at": "2026-11-16T13:00:40Z",
+          "fired_price": 295.7699890136719
         }
       ],
       "fibos": [
