@@ -24,16 +24,7 @@
       "symbol": "NVDA",
       "sl": null,
       "tp": null,
-      "alerts": [
-        {
-          "id": "a3",
-          "price": 158.5,
-          "dir": "below",
-          "status": "fired",
-          "fired_at": "2026-11-16T17:15:29Z",
-          "fired_price": 158.1699981689453
-        }
-      ],
+      "alerts": [],
       "marks": [
         {
           "id": "m1",
