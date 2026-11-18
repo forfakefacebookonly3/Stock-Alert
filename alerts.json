@@ -26,12 +26,6 @@
       "tp": null,
       "alerts": [
         {
-          "id": "a2",
-          "price": 162.92,
-          "dir": "above",
-          "status": "active"
-        },
-        {
           "id": "a3",
           "price": 158.5,
           "dir": "below",
