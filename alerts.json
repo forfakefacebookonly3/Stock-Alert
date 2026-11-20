@@ -153,7 +153,9 @@
           "id": "a1",
           "price": 325,
           "dir": "below",
-          "status": "active"
+          "status": "fired",
+          "fired_at": "2026-11-20T16:45:43Z",
+          "fired_price": 322.3500061035156
         }
       ]
     }
