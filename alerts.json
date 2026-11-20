@@ -143,6 +143,12 @@
       "sl": null,
       "tp": null,
       "alerts": []
+    },
+    {
+      "symbol": "TSM",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
