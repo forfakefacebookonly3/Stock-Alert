@@ -148,7 +148,14 @@
       "symbol": "TSM",
       "sl": null,
       "tp": null,
-      "alerts": []
+      "alerts": [
+        {
+          "id": "a1",
+          "price": 325,
+          "dir": "below",
+          "status": "active"
+        }
+      ]
     }
   ]
 }
