@@ -23,7 +23,10 @@
     {
       "symbol": "NVDA",
       "sl": null,
-      "tp": null,
+      "tp": {
+        "price": 195,
+        "status": "active"
+      },
       "alerts": [
         {
           "id": "a1",
