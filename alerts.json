@@ -163,7 +163,14 @@
       "symbol": "SNDK",
       "sl": null,
       "tp": null,
-      "alerts": [],
+      "alerts": [
+        {
+          "id": "a1",
+          "price": 62.5,
+          "dir": "below",
+          "status": "active"
+        }
+      ],
       "fibos": [
         {
           "id": "f1",
