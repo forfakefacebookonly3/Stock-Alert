@@ -158,6 +158,12 @@
           "fired_price": 322.3500061035156
         }
       ]
+    },
+    {
+      "symbol": "SNDK",
+      "sl": null,
+      "tp": null,
+      "alerts": []
     }
   ]
 }
